@@ -1,0 +1,538 @@
+{
+  "style": {
+    "rules": "Lucide outline for toolbars, menus, settings and player controls; MDI filled only for the small home shortcut chips. Settings index uses Google Material filled (ic:baseline-*) to match the reference's settings list.",
+    "stroke_width": 1.75
+  },
+  "icons": {
+    "back": {
+      "id": "lucide:arrow-left",
+      "file": ".iconbuddy/icons/back.svg",
+      "license": "ISC"
+    },
+    "search": {
+      "id": "lucide:search",
+      "file": ".iconbuddy/icons/search.svg",
+      "license": "ISC"
+    },
+    "view_menu": {
+      "id": "lucide:layout-panel-left",
+      "file": ".iconbuddy/icons/view_menu.svg",
+      "license": "ISC"
+    },
+    "account": {
+      "id": "lucide:user-cog",
+      "file": ".iconbuddy/icons/account.svg",
+      "license": "ISC"
+    },
+    "more_vert": {
+      "id": "lucide:ellipsis-vertical",
+      "file": ".iconbuddy/icons/more_vert.svg",
+      "license": "ISC"
+    },
+    "chevron_right": {
+      "id": "lucide:chevron-right",
+      "file": ".iconbuddy/icons/chevron_right.svg",
+      "license": "ISC"
+    },
+    "chip_music": {
+      "id": "ri:folder-music-fill",
+      "file": ".iconbuddy/icons/chip_music.svg",
+      "license": "Apache 2.0"
+    },
+    "chip_privacy": {
+      "id": "ri:folder-lock-fill",
+      "file": ".iconbuddy/icons/chip_privacy.svg",
+      "license": "Apache 2.0"
+    },
+    "chip_share": {
+      "id": "mdi:folder-swap",
+      "file": ".iconbuddy/icons/chip_share.svg",
+      "license": "Apache 2.0"
+    },
+    "chip_playlist": {
+      "id": "mdi:playlist-plus",
+      "file": ".iconbuddy/icons/chip_playlist.svg",
+      "license": "Apache 2.0"
+    },
+    "file_transfer": {
+      "id": "lucide:arrow-right-left",
+      "file": ".iconbuddy/icons/file_transfer.svg",
+      "license": "ISC"
+    },
+    "private_folder": {
+      "id": "lucide:folder-lock",
+      "file": ".iconbuddy/icons/private_folder.svg",
+      "license": "ISC"
+    },
+    "video_playlists": {
+      "id": "lucide:plus",
+      "file": ".iconbuddy/icons/video_playlists.svg",
+      "license": "ISC"
+    },
+    "network_stream": {
+      "id": "lucide:globe",
+      "file": ".iconbuddy/icons/network_stream.svg",
+      "license": "ISC"
+    },
+    "local_network": {
+      "id": "lucide:monitor",
+      "file": ".iconbuddy/icons/local_network.svg",
+      "license": "ISC"
+    },
+    "media_manager": {
+      "id": "lucide:folder-search",
+      "file": ".iconbuddy/icons/media_manager.svg",
+      "license": "ISC"
+    },
+    "cloud_drive": {
+      "id": "lucide:cloud",
+      "file": ".iconbuddy/icons/cloud_drive.svg",
+      "license": "ISC"
+    },
+    "status_saver": {
+      "id": "lucide:message-circle",
+      "file": ".iconbuddy/icons/status_saver.svg",
+      "license": "ISC"
+    },
+    "app_theme": {
+      "id": "lucide:shirt",
+      "file": ".iconbuddy/icons/app_theme.svg",
+      "license": "ISC"
+    },
+    "settings": {
+      "id": "lucide:hexagon",
+      "file": ".iconbuddy/icons/settings.svg",
+      "license": "ISC"
+    },
+    "legal": {
+      "id": "lucide:scale",
+      "file": ".iconbuddy/icons/legal.svg",
+      "license": "ISC"
+    },
+    "help": {
+      "id": "tabler:help-circle",
+      "file": ".iconbuddy/icons/help.svg",
+      "license": "MIT"
+    },
+    "quit": {
+      "id": "lucide:log-out",
+      "file": ".iconbuddy/icons/quit.svg",
+      "license": "ISC"
+    },
+    "check": {
+      "id": "lucide:check",
+      "file": ".iconbuddy/icons/check.svg",
+      "license": "ISC"
+    },
+    "set_list": {
+      "id": "ic:baseline-format-list-bulleted",
+      "file": ".iconbuddy/icons/set_list.svg",
+      "license": "Apache 2.0"
+    },
+    "set_player": {
+      "id": "ic:baseline-play-arrow",
+      "file": ".iconbuddy/icons/set_player.svg",
+      "license": "Apache 2.0"
+    },
+    "set_decoder": {
+      "id": "ic:baseline-settings",
+      "file": ".iconbuddy/icons/set_decoder.svg",
+      "license": "Apache 2.0"
+    },
+    "set_audio": {
+      "id": "ic:baseline-music-note",
+      "file": ".iconbuddy/icons/set_audio.svg",
+      "license": "Apache 2.0"
+    },
+    "set_subtitle": {
+      "id": "ic:baseline-message",
+      "file": ".iconbuddy/icons/set_subtitle.svg",
+      "license": "Apache 2.0"
+    },
+    "set_general": {
+      "id": "ic:baseline-assignment-turned-in",
+      "file": ".iconbuddy/icons/set_general.svg",
+      "license": "Apache 2.0"
+    },
+    "set_development": {
+      "id": "ic:baseline-developer-mode",
+      "file": ".iconbuddy/icons/set_development.svg",
+      "license": "Apache 2.0"
+    },
+    "set_language": {
+      "id": "ic:outline-translate",
+      "file": ".iconbuddy/icons/set_language.svg",
+      "license": "Apache 2.0"
+    },
+    "vm_all": {
+      "id": "tabler:folders",
+      "file": ".iconbuddy/icons/vm_all.svg",
+      "license": "MIT"
+    },
+    "vm_files": {
+      "id": "tabler:file-text",
+      "file": ".iconbuddy/icons/vm_files.svg",
+      "license": "MIT"
+    },
+    "vm_folders": {
+      "id": "tabler:folder",
+      "file": ".iconbuddy/icons/vm_folders.svg",
+      "license": "MIT"
+    },
+    "lay_list": {
+      "id": "tabler:layout-rows",
+      "file": ".iconbuddy/icons/lay_list.svg",
+      "license": "MIT"
+    },
+    "lay_grid": {
+      "id": "tabler:layout-grid",
+      "file": ".iconbuddy/icons/lay_grid.svg",
+      "license": "MIT"
+    },
+    "sort_title": {
+      "id": "lucide:arrow-down-a-z",
+      "file": ".iconbuddy/icons/sort_title.svg",
+      "license": "ISC"
+    },
+    "sort_date": {
+      "id": "tabler:calendar",
+      "file": ".iconbuddy/icons/sort_date.svg",
+      "license": "MIT"
+    },
+    "sort_played": {
+      "id": "tabler:clock-play",
+      "file": ".iconbuddy/icons/sort_played.svg",
+      "license": "MIT"
+    },
+    "sort_status": {
+      "id": "tabler:circle-dashed",
+      "file": ".iconbuddy/icons/sort_status.svg",
+      "license": "MIT"
+    },
+    "sort_length": {
+      "id": "lucide:monitor-play",
+      "file": ".iconbuddy/icons/sort_length.svg",
+      "license": "ISC"
+    },
+    "sort_size": {
+      "id": "tabler:device-sd-card",
+      "file": ".iconbuddy/icons/sort_size.svg",
+      "license": "MIT"
+    },
+    "sort_resolution": {
+      "id": "tabler:badge-hd",
+      "file": ".iconbuddy/icons/sort_resolution.svg",
+      "license": "MIT"
+    },
+    "sort_path": {
+      "id": "tabler:file-search",
+      "file": ".iconbuddy/icons/sort_path.svg",
+      "license": "MIT"
+    },
+    "sort_framerate": {
+      "id": "tabler:gauge",
+      "file": ".iconbuddy/icons/sort_framerate.svg",
+      "license": "MIT"
+    },
+    "sort_type": {
+      "id": "lucide:file-play",
+      "file": ".iconbuddy/icons/sort_type.svg",
+      "license": "ISC"
+    },
+    "chevron_down": {
+      "id": "tabler:chevron-down",
+      "file": ".iconbuddy/icons/chevron_down.svg",
+      "license": "MIT"
+    },
+    "arrow_up": {
+      "id": "tabler:arrow-up",
+      "file": ".iconbuddy/icons/arrow_up.svg",
+      "license": "MIT"
+    },
+    "arrow_down": {
+      "id": "tabler:arrow-down",
+      "file": ".iconbuddy/icons/arrow_down.svg",
+      "license": "MIT"
+    },
+    "pl_eq": {
+      "id": "mdi:tune-vertical",
+      "file": ".iconbuddy/icons/pl_eq.svg",
+      "license": "Apache 2.0"
+    },
+    "pl_shot": {
+      "id": "tabler:capture",
+      "file": ".iconbuddy/icons/pl_shot.svg",
+      "license": "MIT"
+    },
+    "pl_bg": {
+      "id": "lucide:headphones",
+      "file": ".iconbuddy/icons/pl_bg.svg",
+      "license": "ISC"
+    },
+    "pl_rotate": {
+      "id": "mdi:screen-rotation",
+      "file": ".iconbuddy/icons/pl_rotate.svg",
+      "license": "Apache 2.0"
+    },
+    "pl_night": {
+      "id": "mdi:weather-night",
+      "file": ".iconbuddy/icons/pl_night.svg",
+      "license": "Apache 2.0"
+    },
+    "pl_edit": {
+      "id": "lucide:pencil",
+      "file": ".iconbuddy/icons/pl_edit.svg",
+      "license": "ISC"
+    },
+    "pl_shuffle": {
+      "id": "lucide:shuffle",
+      "file": ".iconbuddy/icons/pl_shuffle.svg",
+      "license": "ISC"
+    },
+    "pl_loop": {
+      "id": "lucide:repeat",
+      "file": ".iconbuddy/icons/pl_loop.svg",
+      "license": "ISC"
+    },
+    "pl_loop_one": {
+      "id": "lucide:repeat-1",
+      "file": ".iconbuddy/icons/pl_loop_one.svg",
+      "license": "ISC"
+    },
+    "pl_mute": {
+      "id": "lucide:volume-x",
+      "file": ".iconbuddy/icons/pl_mute.svg",
+      "license": "ISC"
+    },
+    "pl_volume": {
+      "id": "lucide:volume-2",
+      "file": ".iconbuddy/icons/pl_volume.svg",
+      "license": "ISC"
+    },
+    "pl_sleep": {
+      "id": "lucide:timer",
+      "file": ".iconbuddy/icons/pl_sleep.svg",
+      "license": "ISC"
+    },
+    "pl_ab": {
+      "id": "tabler:arrows-exchange",
+      "file": ".iconbuddy/icons/pl_ab.svg",
+      "license": "MIT"
+    },
+    "pl_audio": {
+      "id": "mdi:music-note",
+      "file": ".iconbuddy/icons/pl_audio.svg",
+      "license": "Apache 2.0"
+    },
+    "pl_subs": {
+      "id": "mdi:subtitles",
+      "file": ".iconbuddy/icons/pl_subs.svg",
+      "license": "Apache 2.0"
+    },
+    "pl_unlock": {
+      "id": "lucide:lock-open",
+      "file": ".iconbuddy/icons/pl_unlock.svg",
+      "license": "ISC"
+    },
+    "pl_lock": {
+      "id": "lucide:lock",
+      "file": ".iconbuddy/icons/pl_lock.svg",
+      "license": "ISC"
+    },
+    "pl_prev": {
+      "id": "mdi:skip-previous",
+      "file": ".iconbuddy/icons/pl_prev.svg",
+      "license": "Apache 2.0"
+    },
+    "pl_next": {
+      "id": "mdi:skip-next",
+      "file": ".iconbuddy/icons/pl_next.svg",
+      "license": "Apache 2.0"
+    },
+    "pl_play": {
+      "id": "mdi:play",
+      "file": ".iconbuddy/icons/pl_play.svg",
+      "license": "Apache 2.0"
+    },
+    "pl_pause": {
+      "id": "mdi:pause",
+      "file": ".iconbuddy/icons/pl_pause.svg",
+      "license": "Apache 2.0"
+    },
+    "pl_zoom": {
+      "id": "tabler:arrows-horizontal",
+      "file": ".iconbuddy/icons/pl_zoom.svg",
+      "license": "MIT"
+    },
+    "pl_pip": {
+      "id": "mdi:picture-in-picture-bottom-right",
+      "file": ".iconbuddy/icons/pl_pip.svg",
+      "license": "Apache 2.0"
+    },
+    "pl_rew": {
+      "id": "mdi:rewind",
+      "file": ".iconbuddy/icons/pl_rew.svg",
+      "license": "Apache 2.0"
+    },
+    "pl_ff": {
+      "id": "mdi:fast-forward",
+      "file": ".iconbuddy/icons/pl_ff.svg",
+      "license": "Apache 2.0"
+    },
+    "chevron_left": {
+      "id": "lucide:chevron-left",
+      "file": ".iconbuddy/icons/chevron_left.svg",
+      "license": "ISC"
+    },
+    "ov_aspect": {
+      "id": "mdi:aspect-ratio",
+      "file": ".iconbuddy/icons/ov_aspect.svg",
+      "license": "Apache 2.0"
+    },
+    "ov_display": {
+      "id": "mdi:tune",
+      "file": ".iconbuddy/icons/ov_display.svg",
+      "license": "Apache 2.0"
+    },
+    "ov_playlist": {
+      "id": "mdi:playlist-play",
+      "file": ".iconbuddy/icons/ov_playlist.svg",
+      "license": "Apache 2.0"
+    },
+    "ov_network": {
+      "id": "lucide:globe",
+      "file": ".iconbuddy/icons/ov_network.svg",
+      "license": "ISC"
+    },
+    "ov_info": {
+      "id": "lucide:list",
+      "file": ".iconbuddy/icons/ov_info.svg",
+      "license": "ISC"
+    },
+    "ov_share": {
+      "id": "mdi:share-outline",
+      "file": ".iconbuddy/icons/ov_share.svg",
+      "license": "Apache 2.0"
+    },
+    "ov_cut": {
+      "id": "lucide:crop",
+      "file": ".iconbuddy/icons/ov_cut.svg",
+      "license": "ISC"
+    },
+    "ov_bookmark": {
+      "id": "lucide:bookmark",
+      "file": ".iconbuddy/icons/ov_bookmark.svg",
+      "license": "ISC"
+    },
+    "ov_tutorial": {
+      "id": "lucide:lightbulb",
+      "file": ".iconbuddy/icons/ov_tutorial.svg",
+      "license": "ISC"
+    },
+    "sp_reset": {
+      "id": "mdi:restore",
+      "file": ".iconbuddy/icons/sp_reset.svg",
+      "license": "Apache 2.0"
+    },
+    "sp_minus": {
+      "id": "lucide:minus",
+      "file": ".iconbuddy/icons/sp_minus.svg",
+      "license": "ISC"
+    },
+    "sp_plus": {
+      "id": "lucide:plus",
+      "file": ".iconbuddy/icons/sp_plus.svg",
+      "license": "ISC"
+    },
+    "sp_edit": {
+      "id": "mdi:pencil",
+      "file": ".iconbuddy/icons/sp_edit.svg",
+      "license": "Apache 2.0"
+    },
+    "close": {
+      "id": "lucide:x",
+      "file": ".iconbuddy/icons/close.svg",
+      "license": "ISC"
+    },
+    "pl_brightness": {
+      "id": "uil:brightness",
+      "file": ".iconbuddy/icons/pl_brightness.svg",
+      "license": "Apache 2.0"
+    },
+    "osd_volume": {
+      "id": "mdi:volume-high",
+      "file": ".iconbuddy/icons/osd_volume.svg",
+      "license": "Apache 2.0"
+    },
+    "pl_lock_filled": {
+      "id": "mdi:lock",
+      "file": ".iconbuddy/icons/pl_lock_filled.svg",
+      "license": "Apache 2.0"
+    },
+    "bm_add": {
+      "id": "mdi:bookmark-plus-outline",
+      "file": ".iconbuddy/icons/bm_add.svg",
+      "license": "Apache 2.0"
+    },
+    "bm_import": {
+      "id": "mdi:tray-arrow-down",
+      "file": ".iconbuddy/icons/bm_import.svg",
+      "license": "Apache 2.0"
+    },
+    "backspace": {
+      "id": "mdi:backspace-outline",
+      "file": ".iconbuddy/icons/backspace.svg",
+      "license": "Apache 2.0"
+    },
+    "fm_transfer": {
+      "id": "mdi:swap-horizontal",
+      "file": ".iconbuddy/icons/fm_transfer.svg",
+      "license": "Apache 2.0"
+    },
+    "fm_lock": {
+      "id": "mdi:lock-outline",
+      "file": ".iconbuddy/icons/fm_lock.svg",
+      "license": "Apache 2.0"
+    },
+    "fm_mp3": {
+      "id": "mdi:headphones",
+      "file": ".iconbuddy/icons/fm_mp3.svg",
+      "license": "Apache 2.0"
+    },
+    "fm_share": {
+      "id": "mdi:share-variant-outline",
+      "file": ".iconbuddy/icons/fm_share.svg",
+      "license": "Apache 2.0"
+    },
+    "fm_rename": {
+      "id": "mdi:pencil-outline",
+      "file": ".iconbuddy/icons/fm_rename.svg",
+      "license": "Apache 2.0"
+    },
+    "fm_cut": {
+      "id": "mdi:content-cut",
+      "file": ".iconbuddy/icons/fm_cut.svg",
+      "license": "Apache 2.0"
+    },
+    "fm_subsearch": {
+      "id": "mdi:subtitles-outline",
+      "file": ".iconbuddy/icons/fm_subsearch.svg",
+      "license": "Apache 2.0"
+    },
+    "fm_info": {
+      "id": "mdi:information-outline",
+      "file": ".iconbuddy/icons/fm_info.svg",
+      "license": "Apache 2.0"
+    },
+    "fm_playlist_add": {
+      "id": "mdi:playlist-plus",
+      "file": ".iconbuddy/icons/fm_playlist_add.svg",
+      "license": "Apache 2.0"
+    },
+    "fm_delete": {
+      "id": "mdi:delete-outline",
+      "file": ".iconbuddy/icons/fm_delete.svg",
+      "license": "Apache 2.0"
+    }
+  }
+}
