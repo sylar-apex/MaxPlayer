@@ -6,7 +6,13 @@ plugins {
     alias(libs.plugins.androidMultiplatformLibrary)
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
+    alias(libs.plugins.kotlinSerialization)
 }
+
+val features = listOf(
+    "home", "folder", "search", "music", "player", "settings", "profile",
+    "theme", "playlists", "privatefolder", "mediamanager", "help", "localnetwork",
+)
 
 kotlin {
     listOf(
@@ -18,65 +24,35 @@ kotlin {
             isStatic = true
         }
     }
-    
+
     jvm()
-    
-    js {
-        browser()
-        binaries.executable()
-    }
-    
+
     @OptIn(ExperimentalWasmDsl::class)
     wasmJs {
         browser()
-        binaries.executable()
     }
-    
+
     android {
-       namespace = "org.app.nxplayer.shared"
-       compileSdk = libs.versions.android.compileSdk.get().toInt()
-       minSdk = libs.versions.android.minSdk.get().toInt()
-    
-       compilerOptions {
-           jvmTarget = JvmTarget.JVM_11
-       }
-       androidResources {
-           enable = true
-       }
-       withHostTest {
-           isIncludeAndroidResources = true
-       }
-       withDeviceTestBuilder {
-           sourceSetTreeName = "test"
-       }.configure {
-           instrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-       }
-    }
-    
-    sourceSets {
-        androidMain.dependencies {
-            implementation(libs.compose.uiToolingPreview)
-            implementation(libs.compose.uiTooling)
+        namespace = "org.app.maxplayerpro.shared"
+        compileSdk = libs.versions.android.compileSdk.get().toInt()
+        minSdk = libs.versions.android.minSdk.get().toInt()
+        compilerOptions {
+            jvmTarget = JvmTarget.fromTarget(libs.versions.javaVersion.get())
         }
+    }
+
+    sourceSets {
         commonMain.dependencies {
-            implementation(libs.compose.runtime)
-            implementation(libs.compose.foundation)
-            implementation(libs.compose.material3)
-            implementation(libs.compose.ui)
-            implementation(libs.compose.components.resources)
-            implementation(libs.compose.uiToolingPreview)
-            implementation(libs.androidx.lifecycle.viewmodelCompose)
-            implementation(libs.androidx.lifecycle.runtimeCompose)
+            api(projects.appcore)
+            api(projects.kmpcore.di)
+            features.forEach { f ->
+                api(project(":appfeatures:$f:domain"))
+                api(project(":appfeatures:$f:presentation"))
+            }
+            implementation(libs.kotlin.serialization)
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
         }
-        jsMain.dependencies {
-            implementation(libs.wrappers.browser)
-        }
     }
-}
-
-dependencies {
-    androidRuntimeClasspath(libs.compose.uiTooling)
 }

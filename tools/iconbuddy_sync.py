@@ -18,7 +18,7 @@ NS = "{http://www.w3.org/2000/svg}"
 def fetch(icon_id):
     collection, name = icon_id.split(":", 1)
     req = urllib.request.Request(f"https://iconbuddy.com/api/v1/icons/{collection}/{name}",
-                                 headers={"X-IconBuddy-Key": os.environ["ICONBUDDY_API_KEY"], "User-Agent": "nxplayer-iconbuddy-sync/1.0"})
+                                 headers={"X-IconBuddy-Key": os.environ["ICONBUDDY_API_KEY"], "User-Agent": "maxplayerpro-iconbuddy-sync/1.0"})
     with urllib.request.urlopen(req, timeout=30) as r:
         return json.load(r)["icon"]
 

@@ -17,11 +17,11 @@ dependencies {
 
 compose.desktop {
     application {
-        mainClass = "org.app.nxplayer.MainKt"
+        mainClass = "org.app.maxplayerpro.MainKt"
 
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
-            packageName = "org.app.nxplayer"
+            packageName = "org.app.maxplayerpro"
             packageVersion = "1.0.0"
         }
     }

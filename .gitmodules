@@ -1,0 +1,6 @@
+[submodule "kmpcore"]
+	path = kmpcore
+	url = https://github.com/sylar-apex/kmpcore.git
+[submodule "kmediaplayer"]
+	path = kmediaplayer
+	url = https://github.com/sylar-apex/kmediaplayer.git

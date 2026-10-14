@@ -11,7 +11,7 @@ kotlin {
     }
 }
 dependencies {
-    implementation(project(":shared"))
+    implementation(projects.shared)
 
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.core.ktx)
@@ -19,12 +19,8 @@ dependencies {
     implementation(libs.compose.foundation)
     implementation(libs.compose.material3)
     implementation(libs.compose.ui)
-    implementation(libs.compose.materialIconsExtended)
     implementation(libs.androidx.lifecycle.runtimeCompose)
-    implementation(libs.media3.exoplayer)
-    implementation(libs.media3.exoplayerHls)
-    implementation(libs.media3.exoplayerDash)
-    implementation(libs.media3.session)
+    implementation(libs.koin.core)
     testImplementation(libs.junit)
 
     implementation(libs.compose.uiToolingPreview)
@@ -32,15 +28,19 @@ dependencies {
 }
 
 android {
-    namespace = "org.app.nxplayer"
+    namespace = "org.app.maxplayerpro"
     compileSdk = libs.versions.android.compileSdk.get().toInt()
 
     defaultConfig {
-        applicationId = "org.app.nxplayer"
+        applicationId = "org.app.maxplayerpro"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
         versionCode = 1
         versionName = "1.0"
+    }
+    buildTypes.getByName("debug") {
+        // `-PdevInstall` installs next to an existing differently-signed build instead of replacing it.
+        if (project.hasProperty("devInstall")) applicationIdSuffix = ".dev"
     }
     packaging {
         resources {

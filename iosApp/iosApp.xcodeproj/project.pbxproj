@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXFileReference section */
-		EA5D56B94EC95776106F6E84 /* Nx Player.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Nx Player.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		EA5D56B94EC95776106F6E84 /* Max Player Pro.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Max Player Pro.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -59,7 +59,7 @@
 		0FC52E500BC329D975C9767F /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				EA5D56B94EC95776106F6E84 /* Nx Player.app */,
+				EA5D56B94EC95776106F6E84 /* Max Player Pro.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -87,7 +87,7 @@
 			packageProductDependencies = (
 			);
 			productName = iosApp;
-			productReference = EA5D56B94EC95776106F6E84 /* Nx Player.app */;
+			productReference = EA5D56B94EC95776106F6E84 /* Max Player Pro.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
