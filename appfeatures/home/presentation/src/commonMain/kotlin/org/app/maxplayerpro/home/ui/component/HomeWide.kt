@@ -18,7 +18,11 @@ import androidx.compose.material.icons.outlined.Refresh
 import org.app.maxplayerpro.appcore.component.LibrarySourcesBar
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.Alignment
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -53,14 +57,21 @@ internal fun HomeWide(
         WideHeader(
             inset = inset,
             title = if (opts.viewMode == ViewMode.Files) "All videos" else "Library",
-            subtitle = if (state.folders.isEmpty()) null else "$videoCount videos in ${state.folders.size} folders",
+            subtitle = when {
+                state.loading -> "Scanning your drives…"
+                state.folders.isEmpty() -> null
+                else -> "$videoCount videos in ${state.folders.size} folders"
+            },
             onSearch = navigation.onSearch,
         ) {
-            IconButton({ onEvent(HomeContract.Event.Refresh) }) { Icon(Icons.Outlined.Refresh, "Refresh") }
+            // While scanning, the refresh button turns into a small spinner.
+            if (state.loading) Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+                CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+            } else IconButton({ onEvent(HomeContract.Event.Refresh) }) { Icon(Icons.Outlined.Refresh, "Refresh") }
             if (folderImport.available) IconButton(folderImport::pickFolder) { Icon(Icons.Outlined.CreateNewFolder, "Open folder") }
             IconButton(onViewMenu) { Icon(Icons.Outlined.GridView, "View options") }
         }
-        if (state.loading) LinearProgressIndicator(Modifier.fillMaxWidth().padding(horizontal = inset).height(2.dp))
+        HorizontalDivider(Modifier.padding(horizontal = inset).padding(top = 8.dp, bottom = 4.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.07f))
     }
 
     if (opts.viewMode == ViewMode.Files) {

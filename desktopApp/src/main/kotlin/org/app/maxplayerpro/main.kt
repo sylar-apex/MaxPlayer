@@ -1,6 +1,16 @@
 package org.app.maxplayerpro
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.window.WindowDraggableArea
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
+import org.app.maxplayerpro.appcore.theme.MaxTheme
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.DpSize
@@ -44,7 +54,22 @@ fun main(args: Array<String>) = application {
             library.refresh()
             library.watchDrives()
         }
-        App(embeddedPlayer = true)
+        // macOS: draw the app under a transparent title bar so it matches the theme instead of a white strip.
+        val mac = remember { System.getProperty("os.name").orEmpty().startsWith("Mac") }
+        LaunchedEffect(mac) {
+            if (mac) window.rootPane.apply {
+                putClientProperty("apple.awt.fullWindowContent", true)
+                putClientProperty("apple.awt.transparentTitleBar", true)
+                putClientProperty("apple.awt.windowTitleVisible", false)
+            }
+        }
+        MaxTheme {
+            Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+                App(embeddedPlayer = true)
+                // The app runs edge to edge; this invisible strip over the top edge drags the window. Hidden in full screen.
+                if (mac && windowState.placement != WindowPlacement.Fullscreen) WindowDraggableArea { Box(Modifier.fillMaxWidth().height(24.dp)) }
+            }
+        }
     }
 }
 

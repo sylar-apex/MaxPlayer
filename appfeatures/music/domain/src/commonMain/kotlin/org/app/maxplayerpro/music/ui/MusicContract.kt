@@ -22,6 +22,8 @@ class MusicContract {
         val favourites: Set<String> = emptySet(),
         val history: Map<String, PlaybackRecord> = emptyMap(),
         val playlists: List<Playlist> = emptyList(),
+        /** True until the first library scan finishes; partial results stay hidden meanwhile. */
+        val scanning: Boolean = true,
     ) : UiState
 
     sealed class Effect : UiEffect

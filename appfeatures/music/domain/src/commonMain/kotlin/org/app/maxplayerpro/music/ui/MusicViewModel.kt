@@ -20,8 +20,11 @@ class MusicViewModel(
 
     init {
         viewModelScope.launch {
-            combine(media.audio, userData.data) { audio, user ->
-                MusicContract.State(audio, user.favourites, user.history, user.playlists.filter { it.isMusic })
+            // Once the first scan has finished, later rescans (Refresh, drive plugged in) update in place.
+            var settled = false
+            combine(media.audio, media.loading, userData.data) { audio, loading, user ->
+                if (!loading) settled = true
+                MusicContract.State(audio, user.favourites, user.history, user.playlists.filter { it.isMusic }, scanning = !settled)
             }.collect { s -> setState { s } }
         }
     }

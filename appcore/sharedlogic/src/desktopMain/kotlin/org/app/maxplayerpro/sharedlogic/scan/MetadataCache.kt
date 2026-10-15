@@ -16,12 +16,15 @@ class MetadataCache(private val file: File = File(System.getProperty("user.home"
     private fun key(f: MediaFile) = "${f.path}|${f.sizeBytes}|${f.dateModifiedMs}"
 
     fun get(f: MediaFile): ProbedInfo? = synchronized(props) {
-        val v = props.getProperty(key(f))?.split(',') ?: return null
-        runCatching { ProbedInfo(v[0].toLong(), v[1].toInt(), v[2].toInt(), v[3].toFloat()) }.getOrNull()
+        val v = props.getProperty(key(f))?.split(SEP) ?: return null
+        // Entries written before tags were cached have no artist/album; probe those audio files again.
+        if (f.isAudio && v.size < 6) return null
+        runCatching { ProbedInfo(v[0].toLong(), v[1].toInt(), v[2].toInt(), v[3].toFloat(), v.getOrElse(4) { "" }, v.getOrElse(5) { "" }) }.getOrNull()
     }
 
     fun put(f: MediaFile, info: ProbedInfo) = synchronized(props) {
-        props.setProperty(key(f), "${info.durationMs},${info.width},${info.height},${info.frameRate}")
+        val tags = info.artist.replace(SEP, ' ') + SEP + info.album.replace(SEP, ' ')
+        props.setProperty(key(f), "${info.durationMs}$SEP${info.width}$SEP${info.height}$SEP${info.frameRate}$SEP$tags")
         if (++dirty >= 50) save()
     }
 
@@ -32,5 +35,10 @@ class MetadataCache(private val file: File = File(System.getProperty("user.home"
     }
 }
 
-fun MediaFile.withInfo(info: ProbedInfo): MediaFile =
-    copy(durationMs = info.durationMs, width = info.width, height = info.height, frameRate = info.frameRate)
+private const val SEP = '\u001F'
+
+fun MediaFile.withInfo(info: ProbedInfo): MediaFile = copy(
+    durationMs = info.durationMs, width = info.width, height = info.height, frameRate = info.frameRate,
+    artist = if (isAudio && info.artist.isNotBlank()) info.artist else artist,
+    album = if (isAudio && info.album.isNotBlank()) info.album else album,
+)

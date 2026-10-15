@@ -36,7 +36,8 @@ class DesktopMediaRepository : MediaRepository {
     private val _audio = MutableStateFlow<List<MediaFile>>(emptyList())
     override val audio: StateFlow<List<MediaFile>> = _audio.asStateFlow()
     override val noMediaDirs: StateFlow<Set<String>> = MutableStateFlow(emptySet())
-    private val _loading = MutableStateFlow(false)
+    // Desktop always scans on launch, so start "loading" to avoid flashing an empty library.
+    private val _loading = MutableStateFlow(true)
     override val loading: StateFlow<Boolean> = _loading.asStateFlow()
 
     private val walker = MediaFileWalker(StorageRoots.skipFolderNames)
@@ -66,8 +67,10 @@ class DesktopMediaRepository : MediaRepository {
     /** Fills in length, resolution and frame rate: cached values at once, then probes the rest in batches. */
     private suspend fun enrich() = withContext(Dispatchers.IO) {
         if (!VlcMediaProbe.isAvailable) return@withContext
-        replaceAll { f -> metadata.get(f)?.let(f::withInfo) ?: f }
-        val missing = (_videos.value + _audio.value).filter { it.durationMs == 0L }
+        val cached = mutableSetOf<String>()
+        replaceAll { f -> metadata.get(f)?.let { cached += f.path; f.withInfo(it) } ?: f }
+        // Music first: a song list without lengths or artists looks broken, a video grid less so.
+        val missing = (_audio.value + _videos.value).filter { it.path !in cached }
         val probed = mutableMapOf<String, MediaFile>()
         for (f in missing) {
             if (!coroutineContext.isActive) break
