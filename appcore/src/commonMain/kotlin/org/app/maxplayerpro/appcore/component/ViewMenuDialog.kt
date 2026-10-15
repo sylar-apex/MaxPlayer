@@ -1,5 +1,6 @@
 package org.app.maxplayerpro.appcore.component
 
+import org.app.maxplayerpro.appcore.adaptive.LocalWindowClass
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -133,6 +134,7 @@ fun ViewMenuDialog(current: ListViewOptions, onDone: (ListViewOptions) -> Unit, 
                     MenuCheck("Recognize .nomedia", o.respectNoMedia) { o = o.copy(respectNoMedia = !o.respectNoMedia) }
                     MenuCheck("Show thumbnail on videos", o.videoThumbnails) { o = o.copy(videoThumbnails = !o.videoThumbnails) }
                     MenuCheck("Show thumbnail on folders", o.folderThumbnails) { o = o.copy(folderThumbnails = !o.folderThumbnails) }
+                    if (!LocalWindowClass.current.isWide) MenuCheck("Show shortcuts at bottom", o.chipsAtBottom) { o = o.copy(chipsAtBottom = !o.chipsAtBottom) }
                 }
             }
             Row(Modifier.fillMaxWidth().padding(top = 4.dp, end = 12.dp, bottom = 9.dp), horizontalArrangement = Arrangement.End) {

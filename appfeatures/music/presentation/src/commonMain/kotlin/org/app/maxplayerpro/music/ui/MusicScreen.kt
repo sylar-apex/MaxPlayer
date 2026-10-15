@@ -1,6 +1,9 @@
 package org.app.maxplayerpro.music.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.material.icons.outlined.Refresh
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
@@ -113,7 +116,7 @@ fun MusicContent(state: MusicContract.State, onBack: () -> Unit, onEvent: (Music
     val g = group
     if (g != null) {
         BackHandler { group = null }
-        Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).statusBarsPadding()) {
             MusicHeader(g.first, g.second, !wide, { play(g.second, 0, false) }, { play(g.second, 0, true) },
                 Modifier.padding(start = 4.dp, end = pad, top = 8.dp, bottom = 12.dp),
                 leading = { IconButton({ group = null }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
@@ -127,8 +130,7 @@ fun MusicContent(state: MusicContract.State, onBack: () -> Unit, onEvent: (Music
 
     val audio = state.audio
     val filtered = sortFiles(audio.filter { query.isBlank() || it.title.contains(query, true) || it.artist.contains(query, true) || it.album.contains(query, true) }, sortKey, true)
-    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        var menu by remember { mutableStateOf(false) }
+    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).statusBarsPadding()) {
         MusicHeader("Music", if (state.scanning) emptyList() else audio, !wide, { play(filtered, 0, false) }, { play(filtered, 0, true) },
             Modifier.padding(start = if (wide) pad else 4.dp, end = 8.dp, top = 8.dp),
             leading = { if (!wide) IconButton(onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
@@ -136,19 +138,12 @@ fun MusicContent(state: MusicContract.State, onBack: () -> Unit, onEvent: (Music
                 if (wide) { SearchField(query, { query = it }, Modifier.width(400.dp)); Spacer(Modifier.weight(1f)) }
                 else Spacer(Modifier.weight(1f))
             },
-            trailing = {
-                Box {
-                    IconButton({ menu = true }) { Icon(Icons.Default.MoreHoriz, "More") }
-                    DropdownMenu(menu, { menu = false }) {
-                        DropdownMenuItem({ Text("Refresh") }, { menu = false; onEvent(MusicContract.Event.Refresh) })
-                    }
-                }
-            })
+            trailing = { IconButton({ onEvent(MusicContract.Event.Refresh) }) { Icon(Icons.Outlined.Refresh, "Refresh") } })
         if (!wide) SearchField(query, { query = it }, Modifier.fillMaxWidth().padding(horizontal = pad).padding(top = 4.dp))
         Row(Modifier.fillMaxWidth().padding(horizontal = pad, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
             PillTabs(tabs, tab, { tab = it }, Modifier.weight(1f))
             if (tab == 0) {
-                SortMenu(sortKey) { sortKey = it }
+                SortMenu(sortKey, compact = !wide) { sortKey = it }
                 if (wide) {
                     Spacer(Modifier.width(8.dp))
                     ViewToggle(grid) { grid = it }
@@ -210,10 +205,12 @@ private fun SearchField(query: String, onChange: (String) -> Unit, modifier: Mod
 }
 
 @Composable
-private fun SortMenu(key: SortKey, onChange: (SortKey) -> Unit) {
+private fun SortMenu(key: SortKey, compact: Boolean, onChange: (SortKey) -> Unit) {
     var open by remember { mutableStateOf(false) }
     Box {
-        Row(
+        // Phones: an icon only, so the tabs keep the row.
+        if (compact) IconButton({ open = true }) { Icon(Icons.AutoMirrored.Filled.Sort, "Sort: ${key.label}") }
+        else Row(
             Modifier.height(38.dp).clip(CircleShape).clickable { open = true }.padding(horizontal = 14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {

@@ -91,20 +91,24 @@ fun HomeContent(state: HomeContract.State, navigation: HomeNavigation, onEvent: 
                 IconButton(navigation.onMe) { Icon(painterResource(Res.drawable.ic_account), "Account") }
             }
             if (state.loading) LinearProgressIndicator(Modifier.fillMaxWidth().height(2.dp))
-            ShortcutChips(navigation)
+            if (!opts.chipsAtBottom) ShortcutChips(navigation)
             LibrarySourcesBar(folderImport, Modifier.padding(bottom = 8.dp))
-            when (opts.viewMode) {
-                ViewMode.Files -> FileList(state.files, opts, emptyTitle = "No videos found.")
-                ViewMode.Folders, ViewMode.AllFolders -> {
-                    if (state.folders.isEmpty()) LibraryEmptyState(state.loading, folderImport)
-                    else FolderList(state.folders, opts, showPath = opts.viewMode == ViewMode.AllFolders) { f: MediaFolder -> navigation.onFolder(f.path) }
+            Box(Modifier.weight(1f)) {
+                when (opts.viewMode) {
+                    ViewMode.Files -> FileList(state.files, opts, emptyTitle = "No videos found.")
+                    ViewMode.Folders, ViewMode.AllFolders -> {
+                        if (state.folders.isEmpty()) LibraryEmptyState(state.loading, folderImport)
+                        else FolderList(state.folders, opts, showPath = opts.viewMode == ViewMode.AllFolders) { f: MediaFolder -> navigation.onFolder(f.path) }
+                    }
                 }
             }
+            // Within thumb reach; the play-last button floats above the row.
+            if (opts.chipsAtBottom) ShortcutChips(navigation, Modifier.navigationBarsPadding())
         }
         if (state.lastPlayed != null) {
             FloatingActionButton(
                 { onEvent(HomeContract.Event.PlayLast) },
-                Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(20.dp),
+                Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(20.dp).padding(bottom = if (opts.chipsAtBottom) 58.dp else 0.dp),
                 containerColor = MaterialTheme.colorScheme.primary, shape = CircleShape,
             ) { Icon(Icons.Default.PlayArrow, "Play last", Modifier.size(30.dp), tint = MaterialTheme.colorScheme.onPrimary) }
         }

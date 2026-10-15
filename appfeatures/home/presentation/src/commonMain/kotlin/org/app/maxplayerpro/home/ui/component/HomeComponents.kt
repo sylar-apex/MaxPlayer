@@ -39,7 +39,6 @@ import org.app.maxplayerpro.appres.resources.Res
 import org.app.maxplayerpro.appres.resources.ic_chip_music
 import org.app.maxplayerpro.appres.resources.ic_chip_playlist
 import org.app.maxplayerpro.appres.resources.ic_chip_privacy
-import org.app.maxplayerpro.appres.resources.ic_chip_share
 import org.app.maxplayerpro.home.ui.HomeNavigation
 import org.app.maxplayerpro.sharedlogic.model.ListField
 import org.app.maxplayerpro.sharedlogic.model.ListLayout
@@ -49,11 +48,10 @@ import org.jetbrains.compose.resources.DrawableResource
 import org.jetbrains.compose.resources.painterResource
 
 @Composable
-internal fun ShortcutChips(navigation: HomeNavigation) {
-    Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+internal fun ShortcutChips(navigation: HomeNavigation, modifier: Modifier = Modifier) {
+    Row(modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 12.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Chip(Res.drawable.ic_chip_music, "Music", navigation.onMusic)
         Chip(Res.drawable.ic_chip_privacy, "Privacy", navigation.onPrivacy)
-        Chip(Res.drawable.ic_chip_share, "MXShare", navigation.onFileTransfer)
         Chip(Res.drawable.ic_chip_playlist, "Video Playlist", navigation.onPlaylists)
     }
 }

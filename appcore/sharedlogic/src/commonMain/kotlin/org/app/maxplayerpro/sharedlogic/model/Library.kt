@@ -36,12 +36,14 @@ data class ListViewOptions(
     val videoThumbnails: Boolean = true,
     /** Folder items show a frame from their first video; off shows a folder icon. */
     val folderThumbnails: Boolean = true,
+    /** Phone home screen: shortcut chips (Music, Privacy, Playlists) sit at the bottom instead of the top. */
+    val chipsAtBottom: Boolean = false,
 ) {
     fun encode(): String = listOf(
         viewMode.name, layout.name, sortKey.name, ascending.toString(),
         fields.joinToString("+") { it.name }, lengthOverThumbnail.toString(),
         showHidden.toString(), respectNoMedia.toString(),
-        videoThumbnails.toString(), folderThumbnails.toString(),
+        videoThumbnails.toString(), folderThumbnails.toString(), chipsAtBottom.toString(),
     ).joinToString("|")
 
     companion object {
@@ -61,6 +63,7 @@ data class ListViewOptions(
                     // Added later: older saved options have 8 parts and keep thumbnails on.
                     videoThumbnails = p.getOrNull(8)?.toBoolean() ?: true,
                     folderThumbnails = p.getOrNull(9)?.toBoolean() ?: true,
+                    chipsAtBottom = p.getOrNull(10)?.toBoolean() ?: false,
                 )
             }.getOrDefault(ListViewOptions())
         }
