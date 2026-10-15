@@ -30,6 +30,18 @@
 | 📂 **Library** | Folder and file views, sorting, grid / list, NEW and SUB tags, search, media manager |
 | 🎨 **Themes** | Dark, light, AMOLED black or adaptive, with 19 accent colours |
 
+## 📸 Screenshots
+
+### Mobile
+
+| Home | Music | Now Playing | Equalizer | Up next |
+|:---:|:---:|:---:|:---:|:---:|
+| <img src="docs/screenshots/mobile/home.png" width="180"> | <img src="docs/screenshots/mobile/music.png" width="180"> | <img src="docs/screenshots/mobile/now.png" width="180"> | <img src="docs/screenshots/mobile/eq.png" width="180"> | <img src="docs/screenshots/mobile/queue.png" width="180"> |
+
+### Desktop
+
+<img src="docs/screenshots/desktop/library.png" width="820">
+
 ## 🏗️ Architecture
 
 Max Player is split into small Gradle modules. Every screen is its own feature with a **domain** module (MVI contract, ViewModel, Koin wiring — no Compose) and a **presentation** module (Compose UI only).
