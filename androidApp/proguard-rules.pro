@@ -19,3 +19,10 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+# libVLC: native code calls back into these classes by name.
+-keep class org.videolan.libvlc.** { *; }
+-keep class org.videolan.medialibrary.** { *; }
+
+# Media3 FFmpeg extension: DefaultRenderersFactory loads the renderers by reflection.
+-keep class androidx.media3.decoder.ffmpeg.** { *; }
+-keepclassmembers class androidx.media3.decoder.ffmpeg.** { native <methods>; }

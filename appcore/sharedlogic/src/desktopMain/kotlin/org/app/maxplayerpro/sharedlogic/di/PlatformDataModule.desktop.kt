@@ -1,6 +1,7 @@
 package org.app.maxplayerpro.sharedlogic.di
 
 import org.app.kmediaplayer.model.MediaFile
+import org.app.kmediaplayer.model.MediaFormats
 import org.app.kmediaplayer.settings.KeyValueStore
 import org.app.maxplayerpro.sharedlogic.data.MediaRepository
 import org.app.maxplayerpro.sharedlogic.data.MemoryPrivateFolder
@@ -18,8 +19,11 @@ private class PreferencesStore(private val node: Preferences) : KeyValueStore {
     override fun keys(): Set<String> = node.keys().toSet()
 }
 
-private val videoExtensions = setOf("mp4", "mkv", "webm", "avi", "mov", "m4v", "ts", "flv", "wmv", "3gp")
-private val audioExtensions = setOf("mp3", "m4a", "aac", "flac", "wav", "ogg", "opus")
+// libVLC plays all of these on desktop.
+private val videoExtensions = setOf("mp4", "mkv", "webm", "avi", "mov", "m4v", "ts", "flv", "f4v", "3gp", "3g2", "mpg", "mpeg", "ogv") +
+    MediaFormats.legacyVideoExtensions
+private val audioExtensions = setOf("mp3", "m4a", "aac", "flac", "wav", "ogg", "opus", "alac", "aiff", "ac3", "eac3", "mka") +
+    MediaFormats.legacyAudioExtensions
 
 /** Scans the user's Movies, Videos and Music folders. */
 private fun scanHome(): List<MediaFile> {

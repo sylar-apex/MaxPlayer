@@ -49,11 +49,29 @@ android {
     }
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // R8 matters for playback smoothness: unoptimised Compose code is several times slower on the UI thread.
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+        }
+        // Release-optimised but debug-signed, for measuring real performance on a device.
+        create("profile") {
+            initWith(getByName("release"))
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += "release"
+        }
+    }
+    splits {
+        // libVLC ships ~55 MB of native code per ABI; one APK per ABI keeps each download small.
+        // App bundles (.aab) split by ABI automatically.
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a", "armeabi-v7a", "x86_64")
+            isUniversalApk = false
         }
     }
     compileOptions {

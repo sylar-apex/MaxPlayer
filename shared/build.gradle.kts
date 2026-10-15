@@ -22,6 +22,8 @@ kotlin {
         iosTarget.binaries.framework {
             baseName = "Shared"
             isStatic = true
+            // Swift implements the player's PlaybackBackend (VLCKit) and registers it with IosPlayback.
+            export(projects.kmediaplayer.core)
         }
     }
 
@@ -44,6 +46,7 @@ kotlin {
     sourceSets {
         commonMain.dependencies {
             api(projects.appcore)
+            api(projects.kmediaplayer.core)
             api(projects.kmpcore.di)
             features.forEach { f ->
                 api(project(":appfeatures:$f:domain"))

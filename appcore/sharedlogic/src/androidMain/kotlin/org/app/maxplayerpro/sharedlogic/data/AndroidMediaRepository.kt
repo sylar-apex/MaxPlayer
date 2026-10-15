@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 import org.app.kmediaplayer.model.MediaFile
+import org.app.kmediaplayer.model.MediaFormats
 import org.app.kmediaplayer.model.SubtitleRef
 import org.app.kmediaplayer.settings.ObservableSettings
 import org.app.kmediaplayer.settings.PlayerKeys
@@ -41,8 +42,10 @@ class AndroidMediaRepository(
     override suspend fun refresh() = withContext(Dispatchers.IO) {
         _loading.value = true
         try {
-            val extra = settings[AppKeys.fileExtensions]
+            val userExtra = settings[AppKeys.fileExtensions]
                 .split(',').map { it.trim().removePrefix(".").lowercase() }.filter { it.isNotEmpty() }.toSet()
+            // MediaStore leaves WMV, VOB, RMVB... out of its video table; with All files access we find them by name.
+            val extra = if (hasAllFilesAccess()) userExtra + MediaFormats.legacyVideoExtensions else userExtra
             val roots = settings[AppKeys.scanFolders]
                 .split('\n').map { it.trim().trimEnd('/') }.filter { it.isNotEmpty() }
             fun inRoots(f: MediaFile) = roots.isEmpty() || roots.any { f.path.startsWith("$it/") }
@@ -120,6 +123,8 @@ class AndroidMediaRepository(
         }
         return out
     }
+
+    private fun hasAllFilesAccess(): Boolean = Build.VERSION.SDK_INT >= 30 && Environment.isExternalStorageManager()
 
     private fun findNoMediaDirs(folders: Set<String>): Set<String> {
         val candidates = mutableSetOf<String>()
