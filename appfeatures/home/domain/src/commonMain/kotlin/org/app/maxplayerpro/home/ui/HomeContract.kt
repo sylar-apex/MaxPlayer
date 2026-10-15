@@ -11,6 +11,8 @@ class HomeContract {
     sealed class Event : UiEvent {
         data class SaveViewOptions(val options: ListViewOptions) : Event()
         data object PlayLast : Event()
+        /** Rescans the library (drives, media index or remembered browser folders). */
+        data object Refresh : Event()
     }
 
     data class State(

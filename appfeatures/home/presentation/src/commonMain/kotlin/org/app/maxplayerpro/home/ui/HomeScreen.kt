@@ -14,6 +14,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.outlined.CreateNewFolder
+import androidx.compose.material.icons.outlined.Refresh
+import org.app.maxplayerpro.appcore.component.LibrarySourcesBar
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import org.app.maxplayerpro.sharedlogic.data.FolderImport
@@ -25,6 +27,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -81,6 +84,7 @@ fun HomeContent(state: HomeContract.State, navigation: HomeNavigation, onEvent: 
     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         Column(Modifier.fillMaxSize()) {
             TopBar(if (opts.viewMode == ViewMode.Files) "Videos" else "Folders") {
+                IconButton({ onEvent(HomeContract.Event.Refresh) }) { Icon(Icons.Outlined.Refresh, "Refresh") }
                 if (folderImport.available) IconButton(folderImport::pickFolder) { Icon(Icons.Outlined.CreateNewFolder, "Open folder") }
                 IconButton(navigation.onSearch) { Icon(painterResource(Res.drawable.ic_search), "Search") }
                 IconButton({ showMenu = true }) { Icon(painterResource(Res.drawable.ic_view_menu), "View Menu") }
@@ -88,6 +92,7 @@ fun HomeContent(state: HomeContract.State, navigation: HomeNavigation, onEvent: 
             }
             if (state.loading) LinearProgressIndicator(Modifier.fillMaxWidth().height(2.dp))
             ShortcutChips(navigation)
+            LibrarySourcesBar(folderImport, Modifier.padding(bottom = 8.dp))
             when (opts.viewMode) {
                 ViewMode.Files -> FileList(state.files, opts, emptyTitle = "No videos found.")
                 ViewMode.Folders, ViewMode.AllFolders -> {
@@ -110,8 +115,11 @@ fun HomeContent(state: HomeContract.State, navigation: HomeNavigation, onEvent: 
 /** Shown while the library is empty: scanning progress, or a way to add videos where the app cannot scan. */
 @Composable
 private fun LibraryEmptyState(loading: Boolean, folderImport: FolderImport) {
+    val sources by folderImport.sources.collectAsState()
     when {
         loading -> EmptyState("Scanning your drives…")
+        // Remembered folders waiting to be reconnected: the card above explains what to do.
+        sources.isNotEmpty() -> EmptyState("Your videos will appear here once your folders are connected.")
         folderImport.available -> EmptyState("Choose a folder to add its videos.\nEvery subfolder is included.") {
             Button(folderImport::pickFolder) {
                 Icon(Icons.Outlined.CreateNewFolder, null)

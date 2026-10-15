@@ -47,6 +47,7 @@ class HomeViewModel(
     override fun handleEvent(event: HomeContract.Event) {
         when (event) {
             is HomeContract.Event.SaveViewOptions -> settings[AppKeys.listViewOptions] = event.options.encode()
+            HomeContract.Event.Refresh -> viewModelScope.launch { media.refresh() }
             HomeContract.Event.PlayLast -> {
                 val last = currentState.lastPlayed ?: return
                 val opts = currentState.options

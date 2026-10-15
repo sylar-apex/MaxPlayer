@@ -8,6 +8,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
 import org.app.kmediaplayer.model.MediaFile
+import org.app.kmediaplayer.web.WebFiles
 import org.app.maxplayerpro.sharedlogic.data.ThumbnailCache
 import org.jetbrains.skia.Image
 import org.w3c.dom.HTMLCanvasElement
@@ -29,6 +30,8 @@ actual object ThumbnailLoader : ThumbnailCache {
 
     actual suspend fun load(file: MediaFile, px: Int): ImageBitmap? {
         if (file.isAudio || file.uri in failed) return null
+        // A remembered file whose folder has not been reconnected yet: try again later, don't mark failed.
+        if (WebFiles.isLocal(file.uri) && !WebFiles.isAvailable(file.uri)) return null
         memory[file.uri]?.let { return it }
         val bitmap = lock.withLock { memory[file.uri] ?: grab(file.uri, px) }
         if (bitmap == null) failed += file.uri else memory[file.uri] = bitmap
@@ -41,7 +44,7 @@ actual object ThumbnailLoader : ThumbnailCache {
         video.onloadedmetadata = { video.currentTime = (video.duration.takeIf { it.isFinite() } ?: 10.0) * 0.12; null }
         video.onseeked = { ready.complete(true); null }
         video.onerror = { _, _, _, _, _ -> ready.complete(false); null }
-        video.src = uri
+        video.src = WebFiles.resolve(uri)
         val ok = withTimeoutOrNull(5_000) { ready.await() } ?: false
         if (!ok || video.videoWidth == 0) return null
         val w = minOf(px, video.videoWidth)

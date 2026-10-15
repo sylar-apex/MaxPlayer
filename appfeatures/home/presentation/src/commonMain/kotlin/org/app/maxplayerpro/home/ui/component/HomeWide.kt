@@ -14,6 +14,8 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.CreateNewFolder
 import androidx.compose.material.icons.outlined.GridView
+import androidx.compose.material.icons.outlined.Refresh
+import org.app.maxplayerpro.appcore.component.LibrarySourcesBar
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -54,6 +56,7 @@ internal fun HomeWide(
             subtitle = if (state.folders.isEmpty()) null else "$videoCount videos in ${state.folders.size} folders",
             onSearch = navigation.onSearch,
         ) {
+            IconButton({ onEvent(HomeContract.Event.Refresh) }) { Icon(Icons.Outlined.Refresh, "Refresh") }
             if (folderImport.available) IconButton(folderImport::pickFolder) { Icon(Icons.Outlined.CreateNewFolder, "Open folder") }
             IconButton(onViewMenu) { Icon(Icons.Outlined.GridView, "View options") }
         }
@@ -65,12 +68,13 @@ internal fun HomeWide(
         return
     }
     if (state.folders.isEmpty()) {
-        Column(Modifier.fillMaxSize()) { header(32.dp); emptyState() }
+        Column(Modifier.fillMaxSize()) { header(32.dp); LibrarySourcesBar(folderImport, Modifier.padding(top = 12.dp), inset = 32.dp); emptyState() }
         return
     }
     if (opts.layout == ListLayout.List) {
         Column(Modifier.fillMaxSize()) {
             header(32.dp)
+            LibrarySourcesBar(folderImport, Modifier.padding(top = 12.dp), inset = 32.dp)
             Box(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                 FolderList(state.folders, opts, showPath = opts.viewMode == ViewMode.AllFolders) { navigation.onFolder(it.path) }
             }
@@ -83,7 +87,7 @@ internal fun HomeWide(
         horizontalArrangement = Arrangement.spacedBy(CardGrid.gap),
         verticalArrangement = Arrangement.spacedBy(CardGrid.gap),
     ) {
-        item(span = { GridItemSpan(maxLineSpan) }) { Column { header(0.dp) } }
+        item(span = { GridItemSpan(maxLineSpan) }) { Column { header(0.dp); LibrarySourcesBar(folderImport, Modifier.padding(top = 12.dp), inset = 0.dp) } }
         state.lastPlayed?.let { last ->
             item(span = { GridItemSpan(maxLineSpan) }) {
                 ContinueWatchingCard(last, progress = null, onPlay = { onEvent(HomeContract.Event.PlayLast) }, modifier = Modifier.fillMaxWidth().padding(top = 12.dp))
