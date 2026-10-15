@@ -32,11 +32,16 @@ data class ListViewOptions(
     val lengthOverThumbnail: Boolean = true,
     val showHidden: Boolean = false,
     val respectNoMedia: Boolean = true,
+    /** Video items show a frame from the video; off shows a plain video icon. */
+    val videoThumbnails: Boolean = true,
+    /** Folder items show a frame from their first video; off shows a folder icon. */
+    val folderThumbnails: Boolean = true,
 ) {
     fun encode(): String = listOf(
         viewMode.name, layout.name, sortKey.name, ascending.toString(),
         fields.joinToString("+") { it.name }, lengthOverThumbnail.toString(),
         showHidden.toString(), respectNoMedia.toString(),
+        videoThumbnails.toString(), folderThumbnails.toString(),
     ).joinToString("|")
 
     companion object {
@@ -53,6 +58,9 @@ data class ListViewOptions(
                     lengthOverThumbnail = p[5].toBoolean(),
                     showHidden = p[6].toBoolean(),
                     respectNoMedia = p[7].toBoolean(),
+                    // Added later: older saved options have 8 parts and keep thumbnails on.
+                    videoThumbnails = p.getOrNull(8)?.toBoolean() ?: true,
+                    folderThumbnails = p.getOrNull(9)?.toBoolean() ?: true,
                 )
             }.getOrDefault(ListViewOptions())
         }
@@ -88,7 +96,7 @@ fun fileComparator(key: SortKey, records: Map<String, PlaybackRecord>): Comparat
     val primary: Comparator<MediaFile> = when (key) {
         SortKey.Title -> byTitle
         SortKey.Date -> compareBy { it.dateModifiedMs }
-        SortKey.PlayedTime -> compareBy { records[it.uri]?.lastPlayedMs ?: 0 }
+        SortKey.PlayedTime -> compareBy { records[it.uri]?.lastPlayedMs ?: 0L }
         SortKey.Status -> compareBy { statusRank(records[it.uri]) }
         SortKey.Length -> compareBy { it.durationMs }
         SortKey.Size -> compareBy { it.sizeBytes }
@@ -119,7 +127,7 @@ fun sortFolders(folders: List<MediaFolder>, key: SortKey, ascending: Boolean, re
         SortKey.Size -> compareBy { it.sizeBytes }
         SortKey.Path -> Comparator { x, y -> naturalCompare(x.path, y.path) }
         SortKey.Length -> compareBy { f -> f.files.sumOf { it.durationMs } }
-        SortKey.PlayedTime -> compareBy { f -> f.files.maxOfOrNull { records[it.uri]?.lastPlayedMs ?: 0 } ?: 0 }
+        SortKey.PlayedTime -> compareBy { f -> f.files.maxOfOrNull { records[it.uri]?.lastPlayedMs ?: 0L } ?: 0L }
         else -> byName
     }
     val c = primary.then(byName)

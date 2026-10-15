@@ -11,6 +11,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.width
+import androidx.compose.material.icons.outlined.CreateNewFolder
+import androidx.compose.material3.Button
+import androidx.compose.material3.Text
+import org.app.maxplayerpro.sharedlogic.data.FolderImport
+import org.koin.compose.koinInject
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -34,7 +41,9 @@ import org.app.maxplayerpro.appres.resources.Res
 import org.app.maxplayerpro.appres.resources.ic_account
 import org.app.maxplayerpro.appres.resources.ic_search
 import org.app.maxplayerpro.appres.resources.ic_view_menu
+import org.app.maxplayerpro.appcore.adaptive.LocalWindowClass
 import org.app.maxplayerpro.home.ui.component.FolderList
+import org.app.maxplayerpro.home.ui.component.HomeWide
 import org.app.maxplayerpro.home.ui.component.ShortcutChips
 import org.app.maxplayerpro.sharedlogic.model.MediaFolder
 import org.app.maxplayerpro.sharedlogic.model.ViewMode
@@ -59,12 +68,20 @@ fun HomeScreen(navigation: HomeNavigation, viewModel: HomeViewModel = koinViewMo
 }
 
 @Composable
-fun HomeContent(state: HomeContract.State, navigation: HomeNavigation, onEvent: (HomeContract.Event) -> Unit) {
+fun HomeContent(state: HomeContract.State, navigation: HomeNavigation, onEvent: (HomeContract.Event) -> Unit, folderImport: FolderImport = koinInject()) {
     var showMenu by rememberSaveable { mutableStateOf(false) }
     val opts = state.options
+    if (LocalWindowClass.current.isWide) {
+        Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+            HomeWide(state, navigation, folderImport, onEvent, onViewMenu = { showMenu = true }) { LibraryEmptyState(state.loading, folderImport) }
+        }
+        if (showMenu) ViewMenuDialog(opts, onDone = { onEvent(HomeContract.Event.SaveViewOptions(it)) }) { showMenu = false }
+        return
+    }
     Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         Column(Modifier.fillMaxSize()) {
             TopBar(if (opts.viewMode == ViewMode.Files) "Videos" else "Folders") {
+                if (folderImport.available) IconButton(folderImport::pickFolder) { Icon(Icons.Outlined.CreateNewFolder, "Open folder") }
                 IconButton(navigation.onSearch) { Icon(painterResource(Res.drawable.ic_search), "Search") }
                 IconButton({ showMenu = true }) { Icon(painterResource(Res.drawable.ic_view_menu), "View Menu") }
                 IconButton(navigation.onMe) { Icon(painterResource(Res.drawable.ic_account), "Account") }
@@ -74,7 +91,7 @@ fun HomeContent(state: HomeContract.State, navigation: HomeNavigation, onEvent: 
             when (opts.viewMode) {
                 ViewMode.Files -> FileList(state.files, opts, emptyTitle = "No videos found.")
                 ViewMode.Folders, ViewMode.AllFolders -> {
-                    if (state.folders.isEmpty()) EmptyState(if (state.loading) "Scanning…" else "No videos found.\nGrant media access to scan your device.")
+                    if (state.folders.isEmpty()) LibraryEmptyState(state.loading, folderImport)
                     else FolderList(state.folders, opts, showPath = opts.viewMode == ViewMode.AllFolders) { f: MediaFolder -> navigation.onFolder(f.path) }
                 }
             }
@@ -88,4 +105,20 @@ fun HomeContent(state: HomeContract.State, navigation: HomeNavigation, onEvent: 
         }
     }
     if (showMenu) ViewMenuDialog(opts, onDone = { onEvent(HomeContract.Event.SaveViewOptions(it)) }) { showMenu = false }
+}
+
+/** Shown while the library is empty: scanning progress, or a way to add videos where the app cannot scan. */
+@Composable
+private fun LibraryEmptyState(loading: Boolean, folderImport: FolderImport) {
+    when {
+        loading -> EmptyState("Scanning your drives…")
+        folderImport.available -> EmptyState("Choose a folder to add its videos.\nEvery subfolder is included.") {
+            Button(folderImport::pickFolder) {
+                Icon(Icons.Outlined.CreateNewFolder, null)
+                Spacer(Modifier.width(8.dp))
+                Text("Open folder")
+            }
+        }
+        else -> EmptyState("No videos found.\nGrant media access to scan your device.")
+    }
 }

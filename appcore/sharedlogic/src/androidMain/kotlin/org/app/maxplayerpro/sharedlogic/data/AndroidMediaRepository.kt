@@ -21,6 +21,8 @@ import org.app.kmediaplayer.settings.ObservableSettings
 import org.app.kmediaplayer.settings.PlayerKeys
 import org.app.maxplayerpro.sharedlogic.model.StorageSummary
 import org.app.maxplayerpro.sharedlogic.platform.requestConsent
+import org.app.maxplayerpro.sharedlogic.scan.MediaFileWalker
+import org.app.maxplayerpro.sharedlogic.scan.StorageVolumes
 import org.app.maxplayerpro.sharedlogic.settings.AppKeys
 import java.io.File
 
@@ -36,6 +38,7 @@ class AndroidMediaRepository(
     override val audio: StateFlow<List<MediaFile>> = _audio.asStateFlow()
     private val _noMediaDirs = MutableStateFlow<Set<String>>(emptySet())
     override val noMediaDirs: StateFlow<Set<String>> = _noMediaDirs.asStateFlow()
+    private val walker = MediaFileWalker(skipFolderNames = setOf("Android", "LOST.DIR"))
     private val _loading = MutableStateFlow(false)
     override val loading: StateFlow<Boolean> = _loading.asStateFlow()
 
@@ -52,6 +55,14 @@ class AndroidMediaRepository(
             val v = queryVideos().filter(::inRoots) + queryExtraFiles(extra).filter(::inRoots)
             _videos.value = v.distinctBy { it.path }
             _audio.value = queryAudio().filter(::inRoots)
+            // Like MX Player: with All files access, also walk every volume (internal, SD card, USB pen
+            // drive) for files the media scanner has not indexed. MediaStore results show first.
+            if (hasAllFilesAccess()) {
+                val (walkedAudio, walkedVideo) = StorageVolumes.directories(context)
+                    .flatMap { walker.walk(it) }.filter(::inRoots).partition { it.isAudio }
+                _videos.value = (_videos.value + walkedVideo).distinctBy { it.path }
+                _audio.value = (_audio.value + walkedAudio).distinctBy { it.path }
+            }
             _noMediaDirs.value = findNoMediaDirs((_videos.value + _audio.value).map { it.folderPath }.toSet())
         } finally {
             _loading.value = false

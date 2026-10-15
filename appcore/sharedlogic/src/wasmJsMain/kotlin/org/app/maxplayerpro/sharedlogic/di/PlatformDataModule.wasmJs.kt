@@ -4,7 +4,8 @@ import org.app.kmediaplayer.settings.KeyValueStore
 import org.app.maxplayerpro.sharedlogic.data.MediaRepository
 import org.app.maxplayerpro.sharedlogic.data.MemoryPrivateFolder
 import org.app.maxplayerpro.sharedlogic.data.PrivateFolderRepository
-import org.app.maxplayerpro.sharedlogic.data.SimpleMediaRepository
+import org.app.maxplayerpro.sharedlogic.data.WebMediaRepository
+import org.app.maxplayerpro.sharedlogic.data.FolderImport
 import org.app.maxplayerpro.sharedlogic.data.StoreFactory
 import org.koin.core.module.Module
 import org.koin.dsl.module
@@ -29,6 +30,8 @@ private class LocalStorageStore(private val prefix: String) : KeyValueStore {
 
 actual fun platformDataModule(): Module = module {
     single<StoreFactory> { StoreFactory { name -> LocalStorageStore(name) } }
-    single<MediaRepository> { SimpleMediaRepository() }
+    single { WebMediaRepository() }
+    single<MediaRepository> { get<WebMediaRepository>() }
+    single<FolderImport> { get<WebMediaRepository>() }
     single<PrivateFolderRepository> { MemoryPrivateFolder() }
 }

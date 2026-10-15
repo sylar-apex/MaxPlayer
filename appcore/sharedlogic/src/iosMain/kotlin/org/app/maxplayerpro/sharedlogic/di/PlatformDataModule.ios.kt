@@ -1,6 +1,7 @@
 package org.app.maxplayerpro.sharedlogic.di
 
 import org.app.kmediaplayer.settings.KeyValueStore
+import org.app.maxplayerpro.sharedlogic.data.FolderImport
 import org.app.maxplayerpro.sharedlogic.data.MediaRepository
 import org.app.maxplayerpro.sharedlogic.data.MemoryPrivateFolder
 import org.app.maxplayerpro.sharedlogic.data.PrivateFolderRepository
@@ -21,6 +22,7 @@ private class UserDefaultsStore(private val prefix: String) : KeyValueStore {
 
 actual fun platformDataModule(): Module = module {
     single<StoreFactory> { StoreFactory { name -> UserDefaultsStore(name) } }
+    single<FolderImport> { FolderImport.None }
     single<MediaRepository> { SimpleMediaRepository() }
     single<PrivateFolderRepository> { MemoryPrivateFolder() }
 }

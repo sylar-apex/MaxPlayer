@@ -37,9 +37,9 @@ expect object ThumbnailLoader : ThumbnailCache {
 }
 
 @Composable
-fun Thumbnail(file: MediaFile, modifier: Modifier, showLength: Boolean) {
-    var bmp by remember(file.id) { mutableStateOf<ImageBitmap?>(null) }
-    LaunchedEffect(file.id) { if (!file.isAudio) bmp = ThumbnailLoader.load(file) }
+fun Thumbnail(file: MediaFile, modifier: Modifier, showLength: Boolean, showImage: Boolean = true) {
+    var bmp by remember(file.id, showImage) { mutableStateOf<ImageBitmap?>(null) }
+    LaunchedEffect(file.id, showImage) { if (showImage && !file.isAudio) bmp = ThumbnailLoader.load(file) }
     Box(modifier.clip(RoundedCornerShape(4.dp)).background(MaxColors.thumbnailBackground), contentAlignment = Alignment.Center) {
         val b = bmp
         if (b != null) Image(b, null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop)

@@ -34,7 +34,14 @@ kotlin {
         browser()
     }
 
+    // Keep the standard ios/web source-set tree; the JVM-only set below is added on top of it.
+    applyDefaultHierarchyTemplate()
+
     sourceSets {
+        // Code shared by the two JVM targets (Android and desktop), such as the file-system media walker.
+        val jvmSharedMain by creating { dependsOn(commonMain.get()) }
+        androidMain.get().dependsOn(jvmSharedMain)
+        val desktopMain by getting { dependsOn(jvmSharedMain) }
         commonMain.dependencies {
             api(projects.kmediaplayer.core)
             api(projects.kmpcore.di)
@@ -45,8 +52,14 @@ kotlin {
         androidMain.dependencies {
             implementation(libs.androidx.activity.compose)
         }
+        wasmJsMain.dependencies {
+            implementation(libs.kotlinx.browser)
+        }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
+        }
+        val desktopTest by getting {
+            dependencies { implementation(libs.kotlin.test) }
         }
     }
 }

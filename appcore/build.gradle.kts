@@ -52,6 +52,9 @@ kotlin {
             api(libs.androidx.lifecycle.viewmodelCompose)
             api(libs.koin.compose.viewmodel)
         }
+        wasmJsMain.dependencies {
+            implementation(libs.kotlinx.browser)
+        }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
         }

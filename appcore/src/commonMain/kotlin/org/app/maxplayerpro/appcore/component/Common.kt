@@ -56,9 +56,13 @@ fun Tag(text: String, color: Color) {
 }
 
 @Composable
-fun EmptyState(text: String, modifier: Modifier = Modifier) {
+fun EmptyState(text: String, modifier: Modifier = Modifier, action: (@Composable () -> Unit)? = null) {
     Column(modifier.fillMaxSize().padding(32.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(text, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 16.sp)
+        Text(text, color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = 16.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        if (action != null) {
+            androidx.compose.foundation.layout.Spacer(Modifier.padding(top = 20.dp))
+            action()
+        }
     }
 }
 

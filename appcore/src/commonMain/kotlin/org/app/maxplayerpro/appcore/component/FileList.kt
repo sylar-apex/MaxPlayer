@@ -1,5 +1,11 @@
 package org.app.maxplayerpro.appcore.component
 
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import org.app.maxplayerpro.appcore.adaptive.CardGrid
+import org.app.maxplayerpro.appcore.adaptive.LocalWindowClass
+import org.app.maxplayerpro.appcore.adaptive.VideoCard
+import org.app.maxplayerpro.appcore.adaptive.bleed
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -138,8 +144,33 @@ fun FileList(
                 IconButton({ infoFor = selFiles }) { Icon(Icons.Default.Info, "Info") }
             }
         }
-        header?.invoke()
+        // Wide windows show artwork cards for the Grid layout; List keeps the classic rows.
+        val wide = LocalWindowClass.current.isWide && opts.layout == ListLayout.Grid
+        if (!wide || files.isEmpty()) header?.invoke()
         if (files.isEmpty()) EmptyState(emptyTitle, Modifier.weight(1f))
+        else if (wide) {
+            // Laptops and desktops: artwork cards; the header scrolls with the grid.
+            LazyVerticalGrid(
+                GridCells.Adaptive(CardGrid.minCardWidth), Modifier.weight(1f).fillMaxWidth(),
+                contentPadding = CardGrid.contentPadding,
+                horizontalArrangement = Arrangement.spacedBy(CardGrid.gap),
+                verticalArrangement = Arrangement.spacedBy(CardGrid.gap),
+            ) {
+                if (header != null) item(span = { GridItemSpan(maxLineSpan) }) { Box(Modifier.bleed(32.dp)) { header() } }
+                items(files, key = { it.uri }) { f ->
+                    val record = state.history[f.uri]
+                    VideoCard(
+                        f,
+                        onClick = { if (selecting) toggle(f) else send(Event.Play(files, files.indexOf(f))) },
+                        progress = record?.takeIf { !it.finished && f.durationMs > 0 }?.let { (it.positionMs.toFloat() / f.durationMs).coerceIn(0f, 1f) },
+                        tags = buildList { if (isNew(f, now, state.newTaggedPeriod) && record == null) add("NEW") },
+                        highlighted = f.uri in selected || (state.markLastPlayed && f.uri == lastPlayed),
+                        options = opts, lastPlayedMs = record?.lastPlayedMs ?: 0,
+                        onMore = { actionsFor = f },
+                    )
+                }
+            }
+        }
         else Box(Modifier.weight(1f)) {
             val row: @Composable (MediaFile) -> Unit = { f ->
                 val tags = buildList {
@@ -226,7 +257,7 @@ private fun FileRow(
     val lengthOnThumb = ListField.Length in opts.fields && opts.lengthOverThumbnail
     if (opts.layout == ListLayout.Grid) {
         Column(Modifier.background(bg).combinedClickable(onClick = onClick, onLongClick = onLongClick).padding(6.dp)) {
-            Thumbnail(f, Modifier.fillMaxWidth().aspectRatio(16f / 9f).combinedClickable(onClick = onThumbClick, onLongClick = onLongClick), lengthOnThumb)
+            Thumbnail(f, Modifier.fillMaxWidth().aspectRatio(16f / 9f).combinedClickable(onClick = onThumbClick, onLongClick = onLongClick), lengthOnThumb, showImage = opts.videoThumbnails)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(f.title, Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis, fontSize = 14.sp, color = titleColor)
                 if (!selecting) IconButton(onMore, Modifier.size(32.dp)) { Icon(Icons.Default.MoreVert, "More") }
@@ -241,7 +272,7 @@ private fun FileRow(
     ) {
         if (showThumb) {
             Box {
-                Thumbnail(f, Modifier.size(width = 96.dp, height = 56.dp).combinedClickable(onClick = onThumbClick, onLongClick = onLongClick), lengthOnThumb)
+                Thumbnail(f, Modifier.size(width = 96.dp, height = 56.dp).combinedClickable(onClick = onThumbClick, onLongClick = onLongClick), lengthOnThumb, showImage = opts.videoThumbnails)
                 if (isSelected) Checkbox(true, null, Modifier.align(Alignment.TopEnd).size(20.dp))
             }
             Spacer(Modifier.width(10.dp))

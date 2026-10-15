@@ -24,6 +24,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -76,7 +77,10 @@ fun ViewMenuDialog(current: ListViewOptions, onDone: (ListViewOptions) -> Unit, 
     val accent = MaterialTheme.colorScheme.primary
     Dialog(onDismiss, DialogProperties(usePlatformDefaultWidth = false)) {
         Column(Modifier.width(299.dp).height(517.dp).background(MaxColors.menuBackground, RoundedCornerShape(3.dp))) {
-            Column(Modifier.weight(1f).padding(top = 12.dp).verticalScroll(rememberScrollState())) {
+            val scroll = rememberScrollState()
+            // Expanding a section brings its options into view instead of leaving them below the fold.
+            LaunchedEffect(fieldsOpen, advancedOpen) { if (fieldsOpen || advancedOpen) scroll.animateScrollTo(scroll.maxValue) }
+            Column(Modifier.weight(1f).padding(top = 12.dp).verticalScroll(scroll)) {
                 Row(Modifier.padding(horizontal = 12.dp)) {
                     Column(Modifier.width(167.dp)) {
                         MenuTitle("View Mode")
@@ -127,6 +131,8 @@ fun ViewMenuDialog(current: ListViewOptions, onDone: (ListViewOptions) -> Unit, 
                     MenuCheck("Display length over thumbnail", o.lengthOverThumbnail) { o = o.copy(lengthOverThumbnail = !o.lengthOverThumbnail) }
                     MenuCheck("Show hidden files and folders", o.showHidden) { o = o.copy(showHidden = !o.showHidden) }
                     MenuCheck("Recognize .nomedia", o.respectNoMedia) { o = o.copy(respectNoMedia = !o.respectNoMedia) }
+                    MenuCheck("Show thumbnail on videos", o.videoThumbnails) { o = o.copy(videoThumbnails = !o.videoThumbnails) }
+                    MenuCheck("Show thumbnail on folders", o.folderThumbnails) { o = o.copy(folderThumbnails = !o.folderThumbnails) }
                 }
             }
             Row(Modifier.fillMaxWidth().padding(top = 4.dp, end = 12.dp, bottom = 9.dp), horizontalArrangement = Arrangement.End) {
@@ -148,11 +154,19 @@ private fun MenuDividerLine(modifier: Modifier = Modifier) = Box(modifier.paddin
 
 @Composable
 private fun MenuChoice(icon: DrawableResource, label: String, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    val color = if (selected) MaterialTheme.colorScheme.primary else MaxColors.menuText
-    Column(modifier.height(60.dp).clickable(onClick = onClick), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+    val accent = MaterialTheme.colorScheme.primary
+    val color = if (selected) accent else MaxColors.menuText
+    Column(
+        // The tinted background marks the active choice even when the accent colour is close to the text colour.
+        // A rounded background without clipping, so long labels may still extend past the cell.
+        modifier.height(60.dp).padding(1.dp)
+            .let { if (selected) it.background(accent.copy(alpha = 0.18f), RoundedCornerShape(8.dp)) else it }.clickable(onClick = onClick),
+        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
+    ) {
         Icon(painterResource(icon), label, Modifier.size(24.dp), tint = color)
         Spacer(Modifier.height(6.dp))
-        Text(label, Modifier.wrapContentWidth(unbounded = true), fontSize = 11.sp, lineHeight = 13.sp, color = color, maxLines = 1, softWrap = false)
+        Text(label, Modifier.wrapContentWidth(unbounded = true), fontSize = 11.sp, lineHeight = 13.sp, color = color, maxLines = 1, softWrap = false,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal)
     }
 }
 

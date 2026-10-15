@@ -1,5 +1,10 @@
 package org.app.maxplayerpro.folder.ui
 
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.GridView
+import org.app.kmediaplayer.util.formatSize
+import org.app.maxplayerpro.appcore.adaptive.LocalWindowClass
+import org.app.maxplayerpro.appcore.adaptive.WideHeader
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -38,11 +43,20 @@ fun FolderScreen(
 fun FolderContent(state: FolderContract.State, onBack: () -> Unit, onSearch: () -> Unit, onEvent: (FolderContract.Event) -> Unit) {
     var showMenu by rememberSaveable { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        TopBar(state.title, onBack = onBack) {
-            IconButton(onSearch) { Icon(painterResource(Res.drawable.ic_search), "Search") }
-            IconButton({ showMenu = true }) { Icon(painterResource(Res.drawable.ic_view_menu), "View Menu") }
+        if (LocalWindowClass.current.isWide) {
+            val size = formatSize(state.files.sumOf { it.sizeBytes })
+            FileList(state.files, state.options, emptyTitle = "This folder is empty.", lastPlayed = state.lastPlayed, header = {
+                WideHeader(state.title, subtitle = "${state.files.size} videos · $size", onBack = onBack, onSearch = onSearch) {
+                    IconButton({ showMenu = true }) { Icon(Icons.Outlined.GridView, "View options") }
+                }
+            })
+        } else {
+            TopBar(state.title, onBack = onBack) {
+                IconButton(onSearch) { Icon(painterResource(Res.drawable.ic_search), "Search") }
+                IconButton({ showMenu = true }) { Icon(painterResource(Res.drawable.ic_view_menu), "View Menu") }
+            }
+            FileList(state.files, state.options, emptyTitle = "This folder is empty.", lastPlayed = state.lastPlayed)
         }
-        FileList(state.files, state.options, emptyTitle = "This folder is empty.", lastPlayed = state.lastPlayed)
     }
     if (showMenu) ViewMenuDialog(state.options, onDone = { onEvent(FolderContract.Event.SaveViewOptions(it)) }) { showMenu = false }
 }
