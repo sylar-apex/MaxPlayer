@@ -14,6 +14,18 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.unit.dp
+import androidx.navigation.compose.currentBackStackEntryAsState
+import kotlinx.coroutines.launch
+import org.koin.compose.koinInject
+import org.app.maxplayerpro.appcore.adaptive.LocalInTitleBar
+import org.app.maxplayerpro.appcore.adaptive.LocalTitleBarArea
+import org.app.maxplayerpro.appcore.adaptive.LocalTitleBarHost
+import org.app.maxplayerpro.appcore.adaptive.TitleBar
+import org.app.maxplayerpro.appcore.adaptive.TitleBarHeight
+import org.app.maxplayerpro.appcore.adaptive.TitleBarHost
+import org.app.maxplayerpro.sharedlogic.data.MediaRepository
 import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
 import com.psbapp.navigation.utils.LocalNavHostController
@@ -46,11 +58,23 @@ fun App(startScreen: AppScreen? = null, embeddedPlayer: Boolean = false) {
         val navController = rememberNavController()
         ProvideWindowClass {
             val wide = LocalWindowClass.current.isWide
-            Row(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+            // macOS wide windows: one bar across the window top, in the title bar (dragging it moves the window).
+            val inTitle = wide && LocalInTitleBar.current
+            val titleBar = remember { TitleBarHost() }
+            if (inTitle) {
+                val media = koinInject<MediaRepository>()
+                val refreshing by media.loading.collectAsState()
+                val scope = rememberCoroutineScope()
+                val entry by navController.currentBackStackEntryAsState()
+                // A page without a WideHeader must not keep the previous page's title.
+                LaunchedEffect(entry?.id) { titleBar.clear() }
+                LocalTitleBarArea.current { TitleBar(titleBar, refreshing) { scope.launch { media.refresh() } } }
+            }
+            Row(Modifier.fillMaxSize().padding(top = if (inTitle) TitleBarHeight else 0.dp).background(MaterialTheme.colorScheme.background)) {
                 // Laptops, desktops and wide browser windows get a permanent sidebar; phones keep the chips and profile page.
                 if (wide) Sidebar(navController)
                 Box(Modifier.weight(1f).fillMaxHeight()) {
-                    CompositionLocalProvider(LocalNavHostController provides navController) {
+                    CompositionLocalProvider(LocalNavHostController provides navController, LocalTitleBarHost provides titleBar.takeIf { inTitle }) {
                         PSBNavHost(navController, startDestination = Routes.Home, isAnimationEnabled = false) {
                             appNavGraph(navController)
                         }

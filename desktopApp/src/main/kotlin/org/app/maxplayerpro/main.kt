@@ -8,6 +8,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.CompositionLocalProvider
+import org.app.maxplayerpro.appcore.adaptive.LocalInTitleBar
+import org.app.maxplayerpro.appcore.adaptive.LocalTitleBarArea
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import org.app.maxplayerpro.appcore.theme.MaxTheme
@@ -72,9 +75,11 @@ private fun runApp(args: Array<String>) = application {
         }
         MaxTheme {
             Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-                App(embeddedPlayer = true)
-                // The app runs edge to edge; this invisible strip over the top edge drags the window. Hidden in full screen.
-                if (mac && windowState.placement != WindowPlacement.Fullscreen) WindowDraggableArea { Box(Modifier.fillMaxWidth().height(24.dp)) }
+                // macOS: the app draws its own title bar (page title, back, search, refresh); dragging it moves the window.
+                CompositionLocalProvider(
+                    LocalInTitleBar provides mac,
+                    LocalTitleBarArea provides { content -> WindowDraggableArea { content() } },
+                ) { App(embeddedPlayer = true) }
             }
         }
     }

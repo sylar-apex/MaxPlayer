@@ -46,6 +46,8 @@ fun WideHeader(
     inset: androidx.compose.ui.unit.Dp = 32.dp,
     actions: @Composable RowScope.() -> Unit = {},
 ) {
+    // macOS: the shell's title bar shows this header instead.
+    LocalTitleBarHost.current?.let { PublishToTitleBar(it, TitleBarPage(title, subtitle, onBack, onSearch, actions)); return }
     Row(
         Modifier.fillMaxWidth().padding(start = if (onBack != null) (inset - 16.dp).coerceAtLeast(0.dp) else inset, end = (inset - 8.dp).coerceAtLeast(0.dp), top = 28.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,

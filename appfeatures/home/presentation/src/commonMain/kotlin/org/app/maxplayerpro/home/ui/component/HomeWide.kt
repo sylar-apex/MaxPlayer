@@ -31,6 +31,7 @@ import org.app.maxplayerpro.appcore.adaptive.ContinueWatchingCard
 import org.app.maxplayerpro.appcore.adaptive.FolderCard
 import org.app.maxplayerpro.appcore.adaptive.SectionTitle
 import org.app.maxplayerpro.appcore.adaptive.WideHeader
+import org.app.maxplayerpro.appcore.adaptive.LocalTitleBarHost
 import org.app.maxplayerpro.appcore.component.FileList
 import org.app.maxplayerpro.home.ui.HomeContract
 import org.app.maxplayerpro.home.ui.HomeNavigation
@@ -53,6 +54,7 @@ internal fun HomeWide(
 ) {
     val opts = state.options
     val videoCount = state.folders.sumOf { it.files.size }
+    val inTitleBar = LocalTitleBarHost.current != null
     val header: @Composable (inset: androidx.compose.ui.unit.Dp) -> Unit = { inset ->
         WideHeader(
             inset = inset,
@@ -64,14 +66,14 @@ internal fun HomeWide(
             },
             onSearch = navigation.onSearch,
         ) {
-            // While scanning, the refresh button turns into a small spinner.
-            if (state.loading) Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+            // While scanning, the refresh button turns into a small spinner (the title bar has its own refresh).
+            if (inTitleBar) Unit else if (state.loading) Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
             } else IconButton({ onEvent(HomeContract.Event.Refresh) }) { Icon(Icons.Outlined.Refresh, "Refresh") }
             if (folderImport.available) IconButton(folderImport::pickFolder) { Icon(Icons.Outlined.CreateNewFolder, "Open folder") }
             IconButton(onViewMenu) { Icon(Icons.Outlined.GridView, "View options") }
         }
-        HorizontalDivider(Modifier.padding(horizontal = inset).padding(top = 8.dp, bottom = 4.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.07f))
+        if (!inTitleBar) HorizontalDivider(Modifier.padding(horizontal = inset).padding(top = 8.dp, bottom = 4.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.07f))
     }
 
     if (opts.viewMode == ViewMode.Files) {

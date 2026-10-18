@@ -1,5 +1,6 @@
 package org.app.maxplayerpro.navigation
 
+import org.app.maxplayerpro.appcore.adaptive.LocalInTitleBar
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -94,7 +95,7 @@ internal fun Sidebar(navController: NavController, modifier: Modifier = Modifier
             .drawBehind { drawLine(border, Offset(size.width - 0.5f, 0f), Offset(size.width - 0.5f, size.height), 1.dp.toPx()) }
             .padding(horizontal = 14.dp),
     ) {
-        Row(Modifier.padding(start = 8.dp, top = 40.dp, bottom = 22.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.padding(start = 8.dp, top = if (LocalInTitleBar.current) 20.dp else 40.dp, bottom = 22.dp), verticalAlignment = Alignment.CenterVertically) {
             Image(painterResource(Res.drawable.app_logo), null, Modifier.size(34.dp).clip(RoundedCornerShape(9.dp)))
             Spacer(Modifier.width(12.dp))
             Column {
