@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.CompositionLocalProvider
+import org.app.kmediaplayer.ui.music.LocalWindowTopInset
 import org.app.maxplayerpro.appcore.adaptive.LocalInTitleBar
 import org.app.maxplayerpro.appcore.adaptive.LocalTitleBarArea
 import androidx.compose.runtime.remember
@@ -79,6 +80,8 @@ private fun runApp(args: Array<String>) = application {
                 CompositionLocalProvider(
                     LocalInTitleBar provides mac,
                     LocalTitleBarArea provides { content -> WindowDraggableArea { content() } },
+                    // The player and Now Playing sit under the traffic lights; no lights in full screen.
+                    LocalWindowTopInset provides if (mac && windowState.placement != WindowPlacement.Fullscreen) 28.dp else 0.dp,
                 ) { App(embeddedPlayer = true) }
             }
         }
