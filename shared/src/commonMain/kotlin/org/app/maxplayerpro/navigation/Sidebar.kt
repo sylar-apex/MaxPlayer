@@ -3,6 +3,7 @@ package org.app.maxplayerpro.navigation
 import org.app.maxplayerpro.appcore.adaptive.LocalInTitleBar
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -95,13 +96,16 @@ internal fun Sidebar(navController: NavController, modifier: Modifier = Modifier
             .drawBehind { drawLine(border, Offset(size.width - 0.5f, 0f), Offset(size.width - 0.5f, size.height), 1.dp.toPx()) }
             .padding(horizontal = 14.dp),
     ) {
-        Row(Modifier.padding(start = 8.dp, top = if (LocalInTitleBar.current) 20.dp else 40.dp, bottom = 22.dp), verticalAlignment = Alignment.CenterVertically) {
-            Image(painterResource(Res.drawable.app_logo), null, Modifier.size(34.dp).clip(RoundedCornerShape(9.dp)))
-            Spacer(Modifier.width(12.dp))
-            Column {
-                Text("Max Player", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
-                Text("PRO", fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 2.sp, color = MaterialTheme.colorScheme.primary)
-            }
+        // Compact brand row: one line, with a small PRO chip.
+        Row(Modifier.padding(start = 10.dp, top = if (LocalInTitleBar.current) 16.dp else 40.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Image(painterResource(Res.drawable.app_logo), null, Modifier.size(26.dp).clip(RoundedCornerShape(7.dp)))
+            Spacer(Modifier.width(10.dp))
+            Text("Max Player", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onBackground)
+            Spacer(Modifier.width(8.dp))
+            Text(
+                "PRO", fontSize = 8.sp, lineHeight = 8.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp, color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.5f), RoundedCornerShape(4.dp)).padding(horizontal = 5.dp, vertical = 2.dp),
+            )
         }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
             Section("LIBRARY")
