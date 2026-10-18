@@ -112,8 +112,8 @@ fun TitleBar(
             }
             if (page != null) Row(Modifier.align(Alignment.CenterEnd), horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically, content = page.actions)
         }
-        // Divider; while refreshing a light track with the progress running along it.
-        if (refreshing) LinearProgressIndicator(Modifier.fillMaxWidth().height(2.dp), color = colors.primary, trackColor = colors.onSurface.copy(alpha = 0.08f), strokeCap = StrokeCap.Butt, gapSize = 0.dp)
+        // Divider; while refreshing a faint track with a soft progress line running along it (never bright on dark themes).
+        if (refreshing) LinearProgressIndicator(Modifier.fillMaxWidth().height(2.dp), color = colors.onSurface.copy(alpha = 0.28f), trackColor = colors.onSurface.copy(alpha = 0.08f), strokeCap = StrokeCap.Butt, gapSize = 0.dp)
         else Box(Modifier.fillMaxWidth().height(1.dp).background(colors.onSurface.copy(alpha = 0.08f)))
     }
 }
