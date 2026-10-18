@@ -37,6 +37,7 @@ import org.app.maxplayerpro.appcore.adaptive.LocalWindowClass
 import org.app.maxplayerpro.appcore.adaptive.ProvideWindowClass
 import org.app.maxplayerpro.appcore.theme.MaxTheme
 import org.app.maxplayerpro.navigation.Routes
+import org.app.maxplayerpro.navigation.NavHistory
 import org.app.maxplayerpro.navigation.Sidebar
 import org.app.maxplayerpro.navigation.appNavGraph
 import org.app.maxplayerpro.player.ui.MaxPlayerContent
@@ -66,9 +67,16 @@ fun App(startScreen: AppScreen? = null, embeddedPlayer: Boolean = false) {
                 val refreshing by media.loading.collectAsState()
                 val scope = rememberCoroutineScope()
                 val entry by navController.currentBackStackEntryAsState()
+                val history = remember(navController) { NavHistory(navController) }
                 // A page without a WideHeader must not keep the previous page's title.
-                LaunchedEffect(entry?.id) { titleBar.clear() }
-                LocalTitleBarArea.current { TitleBar(titleBar, refreshing) { scope.launch { media.refresh() } } }
+                LaunchedEffect(entry?.id) { titleBar.clear(); history.onPageChanged() }
+                val canBack = entry != null && navController.previousBackStackEntry != null
+                LocalTitleBarArea.current {
+                    TitleBar(
+                        titleBar, refreshing, onRefresh = { scope.launch { media.refresh() } },
+                        onBack = history::back.takeIf { canBack }, onForward = history::forward.takeIf { history.canGoForward },
+                    )
+                }
             }
             Row(Modifier.fillMaxSize().padding(top = if (inTitle) TitleBarHeight else 0.dp).background(MaterialTheme.colorScheme.background)) {
                 // Laptops, desktops and wide browser windows get a permanent sidebar; phones keep the chips and profile page.

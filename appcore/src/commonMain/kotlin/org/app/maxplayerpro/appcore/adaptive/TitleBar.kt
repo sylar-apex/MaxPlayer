@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
@@ -82,12 +83,19 @@ internal fun PublishToTitleBar(host: TitleBarHost, page: TitleBarPage) {
 }
 
 /**
- * macOS title bar across the whole window, beside the traffic lights: the page title, then back, search and
+ * macOS title bar across the whole window, beside the traffic lights: the page title, then back, forward, search and
  * refresh centred, the page's actions (grid / list) at the end. The divider below doubles as a progress line
  * while [refreshing].
  */
 @Composable
-fun TitleBar(host: TitleBarHost, refreshing: Boolean, onRefresh: () -> Unit) {
+fun TitleBar(
+    host: TitleBarHost,
+    refreshing: Boolean,
+    onRefresh: () -> Unit,
+    /** Browser-style history; null when there is nothing to go back / forward to. */
+    onBack: (() -> Unit)?,
+    onForward: (() -> Unit)?,
+) {
     val page = host.page
     val colors = MaterialTheme.colorScheme
     Column(Modifier.fillMaxWidth().height(TitleBarHeight).background(colors.surface)) {
@@ -97,7 +105,8 @@ fun TitleBar(host: TitleBarHost, refreshing: Boolean, onRefresh: () -> Unit) {
                 if (page.subtitle != null) Text(page.subtitle, fontSize = 11.sp, lineHeight = 13.sp, color = colors.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             Row(Modifier.align(Alignment.Center).widthIn(max = 560.dp), verticalAlignment = Alignment.CenterVertically) {
-                BarButton(Icons.AutoMirrored.Filled.ArrowBack, "Back", page?.onBack)
+                BarButton(Icons.AutoMirrored.Filled.ArrowBack, "Back", onBack)
+                BarButton(Icons.AutoMirrored.Filled.ArrowForward, "Forward", onForward)
                 SearchPill(Modifier.padding(horizontal = 8.dp).weight(1f), page?.onSearch)
                 BarButton(Icons.Filled.Refresh, "Refresh", onRefresh.takeUnless { refreshing })
             }
