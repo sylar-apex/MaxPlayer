@@ -49,6 +49,8 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -186,9 +188,15 @@ fun FolderCard(folder: MediaFolder, onClick: () -> Unit, modifier: Modifier = Mo
 /** A small tag ("NEW", …) in the top corner of the artwork. */
 @Composable
 private fun CornerTag(tag: String) {
+    // Tight, trimmed line box so the pill hugs the letters instead of carrying the font's extra leading.
     Text(
-        tag, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.White,
-        modifier = Modifier.background(if (tag == "NEW") MaxColors.tagNew else MaterialTheme.colorScheme.primary, RoundedCornerShape(5.dp)).padding(horizontal = 6.dp, vertical = 2.dp),
+        tag, color = Color.White,
+        style = TextStyle(
+            fontSize = 9.sp, lineHeight = 9.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 0.6.sp,
+            lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.Both),
+        ),
+        modifier = Modifier.background(if (tag == "NEW") MaxColors.tagNew else MaterialTheme.colorScheme.primary, RoundedCornerShape(4.dp))
+            .padding(horizontal = 5.dp, vertical = 3.dp),
     )
 }
 
