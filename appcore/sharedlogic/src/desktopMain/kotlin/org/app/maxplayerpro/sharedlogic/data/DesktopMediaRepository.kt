@@ -8,9 +8,12 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import org.app.kmediaplayer.model.MediaFile
 import org.app.kmediaplayer.model.SubtitleRef
@@ -71,13 +74,21 @@ class DesktopMediaRepository : MediaRepository {
         replaceAll { f -> metadata.get(f)?.let { cached += f.path; f.withInfo(it) } ?: f }
         // Music first: a song list without lengths or artists looks broken, a video grid less so.
         val missing = (_audio.value + _videos.value).filter { it.path !in cached }
-        val probed = mutableMapOf<String, MediaFile>()
-        for (f in missing) {
-            if (!coroutineContext.isActive) break
-            val info = VlcMediaProbe.probe(f.path) ?: continue
-            metadata.put(f, info)
-            probed[f.path] = f.withInfo(info)
-            if (probed.size % 25 == 0) replaceAll { probed[it.path] ?: it }
+        val probed = java.util.concurrent.ConcurrentHashMap<String, MediaFile>()
+        // Several headers at once: each probe mostly waits on disk, so this scales well past the core count.
+        val parallel = Semaphore(PROBE_PARALLELISM)
+        coroutineScope {
+            missing.map { f ->
+                async {
+                    parallel.withPermit {
+                        if (!isActive) return@withPermit
+                        val info = VlcMediaProbe.probe(f.path) ?: return@withPermit
+                        metadata.put(f, info)
+                        probed[f.path] = f.withInfo(info)
+                        if (probed.size % 25 == 0) synchronized(probed) { replaceAll { probed[it.path] ?: it } }
+                    }
+                }
+            }.awaitAll()
         }
         replaceAll { probed[it.path] ?: it }
         metadata.save()
@@ -131,11 +142,12 @@ class DesktopMediaRepository : MediaRepository {
     override suspend fun storageSummary(): StorageSummary? = null
 
     private fun refreshLists(change: (List<MediaFile>) -> List<MediaFile>) {
-        _videos.value = change(_videos.value)
-        _audio.value = change(_audio.value)
+        _videos.update(change)
+        _audio.update(change)
     }
 
     private companion object {
+        const val PROBE_PARALLELISM = 6
         val SUBTITLE_EXTENSIONS = setOf("srt", "vtt", "ass", "ssa", "sub")
     }
 }
