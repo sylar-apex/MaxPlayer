@@ -106,11 +106,12 @@ private fun FolderIcon(modifier: Modifier, isNew: Boolean) {
         if (isNew) Text(
             "NEW", color = Color.White,
             style = TextStyle(
-                fontSize = 8.sp, lineHeight = 8.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 0.5.sp,
+                fontSize = 6.5.sp, lineHeight = 6.5.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.4.sp,
                 lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.Both),
             ),
-            modifier = Modifier.align(Alignment.TopEnd).offset(x = 2.dp, y = 2.dp)
-                .background(MaxColors.tagNew, RoundedCornerShape(3.dp)).padding(horizontal = 4.dp, vertical = 2.5.dp),
+            // Tucked inside the folder body, below the tab, so it reads as a small label rather than a sticker.
+            modifier = Modifier.align(Alignment.TopEnd).offset(x = (-4).dp, y = 8.dp)
+                .background(MaxColors.tagNew, RoundedCornerShape(2.5.dp)).padding(horizontal = 3.dp, vertical = 2.dp),
         )
     }
 }
@@ -128,7 +129,7 @@ internal fun FolderList(
                 Column(Modifier.clickable { onOpen(f) }.padding(6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     FolderIcon(Modifier.size(width = 96.dp, height = 72.dp), f.path in newFolders)
                     Text(f.name, maxLines = 1, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.primary)
-                    Text("${f.files.size} videos", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text("${f.files.size} ${if (f.files.size == 1) "video" else "videos"}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         }
@@ -142,7 +143,7 @@ internal fun FolderList(
                         Text(f.name.replaceFirstChar { it.uppercaseChar() }, fontSize = 15.sp, lineHeight = 18.sp, color = MaterialTheme.colorScheme.primary, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Spacer(Modifier.height(2.dp))
                         val extra = buildList {
-                            add("${f.files.size} videos")
+                            add("${f.files.size} ${if (f.files.size == 1) "video" else "videos"}")
                             if (ListField.Size in opts.fields) add(formatSize(f.sizeBytes))
                         }.joinToString(" · ")
                         Text(extra, fontSize = 12.sp, lineHeight = 15.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
