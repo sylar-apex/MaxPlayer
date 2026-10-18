@@ -9,6 +9,7 @@ import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -90,7 +91,7 @@ private fun rememberHover(): Pair<MutableInteractionSource, Boolean> {
 @Composable
 private fun Artwork(
     file: MediaFile?, hovered: Boolean, modifier: Modifier, progress: Float? = null, fallbackFolder: Boolean = false,
-    showThumbnail: Boolean = true, showLength: Boolean = true,
+    showThumbnail: Boolean = true, showLength: Boolean = true, tags: List<String> = emptyList(),
 ) {
     val thumb = if (showThumbnail) rememberThumbnail(file) else null
     val zoom by animateFloatAsState(if (hovered) 1.06f else 1f)
@@ -108,6 +109,7 @@ private fun Artwork(
             formatDuration(file.durationMs), color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold,
             modifier = Modifier.align(Alignment.BottomEnd).padding(8.dp).background(Color(0xB3000000), RoundedCornerShape(6.dp)).padding(horizontal = 6.dp, vertical = 2.dp),
         )
+        if (tags.isNotEmpty()) Row(Modifier.align(Alignment.TopEnd).padding(8.dp), horizontalArrangement = Arrangement.spacedBy(4.dp)) { tags.forEach { CornerTag(it) } }
         if (progress != null && progress > 0f) LinearProgressIndicator(
             progress = { progress }, modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().height(3.dp),
             color = MaterialTheme.colorScheme.primary, trackColor = Color(0x55FFFFFF),
@@ -134,7 +136,7 @@ fun VideoCard(
     Column(modifier.hoverable(source).clickable(interactionSource = source, indication = null, onClick = onClick)) {
         Artwork(
             file, hovered, Modifier.fillMaxWidth().let { if (highlighted) it.border(2.dp, MaterialTheme.colorScheme.primary, cardShape) else it }, progress,
-            showThumbnail = ListField.Thumbnail in fields && options.videoThumbnails, showLength = lengthOnArtwork,
+            showThumbnail = ListField.Thumbnail in fields && options.videoThumbnails, showLength = lengthOnArtwork, tags = tags,
         )
         Row(Modifier.padding(top = 10.dp), verticalAlignment = Alignment.Top) {
             Column(Modifier.weight(1f)) {
@@ -144,11 +146,6 @@ fun VideoCard(
                 )
                 Spacer(Modifier.height(3.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    tags.forEach { tag ->
-                        Text(tag, fontSize = 9.sp, fontWeight = FontWeight.Bold, color = Color.White,
-                            modifier = Modifier.background(if (tag == "NEW") MaxColors.tagNew else MaterialTheme.colorScheme.primary, RoundedCornerShape(4.dp)).padding(horizontal = 5.dp, vertical = 1.dp))
-                        Spacer(Modifier.width(6.dp))
-                    }
                     Text(fileDetails(file, fields, lengthInline = ListField.Length in fields && !lengthOnArtwork, lastPlayedMs), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
                 if (ListField.Path in fields) Text(file.folderPath, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
@@ -160,13 +157,15 @@ fun VideoCard(
 
 /** A folder in a wide grid: the first video's artwork with the folder's name and contents. */
 @Composable
-fun FolderCard(folder: MediaFolder, onClick: () -> Unit, modifier: Modifier = Modifier, showPath: Boolean = false, showThumbnail: Boolean = true) {
+fun FolderCard(folder: MediaFolder, onClick: () -> Unit, modifier: Modifier = Modifier, showPath: Boolean = false, showThumbnail: Boolean = true, hasNew: Boolean = false) {
     val (source, hovered) = rememberHover()
     val cover = remember(folder.path, showThumbnail) { if (showThumbnail) folder.files.firstOrNull { !it.isAudio } else null }
     Column(modifier.hoverable(source).clickable(interactionSource = source, indication = null, onClick = onClick)) {
         Box {
             Artwork(cover, hovered, Modifier.fillMaxWidth(), fallbackFolder = cover == null)
             Box(Modifier.matchParentSize().clip(cardShape).background(Brush.verticalGradient(0.45f to Color.Transparent, 1f to Color(0xD9000000))))
+            // The folder holds videos not played yet that are still tagged "NEW".
+            if (hasNew) Box(Modifier.align(Alignment.TopEnd).padding(8.dp)) { CornerTag("NEW") }
             Row(Modifier.align(Alignment.BottomStart).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                 Icon(Icons.Default.Folder, null, Modifier.size(16.dp), tint = Color(0xE6FFFFFF))
                 Spacer(Modifier.width(6.dp))
@@ -182,6 +181,15 @@ fun FolderCard(folder: MediaFolder, onClick: () -> Unit, modifier: Modifier = Mo
             maxLines = 1, overflow = TextOverflow.Ellipsis,
         )
     }
+}
+
+/** A small tag ("NEW", …) in the top corner of the artwork. */
+@Composable
+private fun CornerTag(tag: String) {
+    Text(
+        tag, fontSize = 10.sp, fontWeight = FontWeight.Bold, color = Color.White,
+        modifier = Modifier.background(if (tag == "NEW") MaxColors.tagNew else MaterialTheme.colorScheme.primary, RoundedCornerShape(5.dp)).padding(horizontal = 6.dp, vertical = 2.dp),
+    )
 }
 
 /** Large "continue watching" banner for the most recently played video. */

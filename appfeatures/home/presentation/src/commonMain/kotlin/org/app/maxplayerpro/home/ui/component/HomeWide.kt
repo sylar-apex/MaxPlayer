@@ -108,7 +108,7 @@ internal fun HomeWide(
         }
         item(span = { GridItemSpan(maxLineSpan) }) { SectionTitle("Folders", trailing = "${state.folders.size}", inset = 0.dp) }
         items(state.folders, key = { it.path }) { folder ->
-            FolderCard(folder, onClick = { navigation.onFolder(folder.path) }, showPath = opts.viewMode == ViewMode.AllFolders, showThumbnail = opts.folderThumbnails)
+            FolderCard(folder, onClick = { navigation.onFolder(folder.path) }, showPath = opts.viewMode == ViewMode.AllFolders, showThumbnail = opts.folderThumbnails, hasNew = folder.path in state.newFolders)
         }
     }
 }

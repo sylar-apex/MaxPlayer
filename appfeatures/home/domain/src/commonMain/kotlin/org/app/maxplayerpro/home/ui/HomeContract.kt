@@ -23,6 +23,8 @@ class HomeContract {
         val loading: Boolean = false,
         /** The last played file, when the floating "play last" button is enabled. */
         val lastPlayed: MediaFile? = null,
+        /** Paths of folders holding at least one unplayed video tagged "NEW". */
+        val newFolders: Set<String> = emptySet(),
     ) : UiState
 
     sealed class Effect : UiEffect
