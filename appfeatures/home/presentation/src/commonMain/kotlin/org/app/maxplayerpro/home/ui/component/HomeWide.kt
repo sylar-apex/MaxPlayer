@@ -89,7 +89,7 @@ internal fun HomeWide(
             header(32.dp)
             LibrarySourcesBar(folderImport, Modifier.padding(top = 12.dp), inset = 32.dp)
             Box(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                FolderList(state.folders, opts, showPath = opts.viewMode == ViewMode.AllFolders) { navigation.onFolder(it.path) }
+                FolderList(state.folders, opts, showPath = opts.viewMode == ViewMode.AllFolders, newFolders = state.newFolders) { navigation.onFolder(it.path) }
             }
         }
         return

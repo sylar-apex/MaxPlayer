@@ -1,5 +1,10 @@
 package org.app.maxplayerpro.home.ui.component
 
+import androidx.compose.ui.text.style.LineHeightStyle
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.graphics.Color
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -93,13 +98,35 @@ private fun FolderGlyph(modifier: Modifier) {
     }
 }
 
+/** The folder glyph, with a small NEW tag in its top corner when the folder has new videos. */
 @Composable
-internal fun FolderList(folders: List<MediaFolder>, opts: ListViewOptions, showPath: Boolean, onOpen: (MediaFolder) -> Unit) {
+private fun FolderIcon(modifier: Modifier, isNew: Boolean) {
+    Box(modifier) {
+        FolderGlyph(Modifier.fillMaxSize())
+        if (isNew) Text(
+            "NEW", color = Color.White,
+            style = TextStyle(
+                fontSize = 8.sp, lineHeight = 8.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 0.5.sp,
+                lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.Both),
+            ),
+            modifier = Modifier.align(Alignment.TopEnd).offset(x = 2.dp, y = 2.dp)
+                .background(MaxColors.tagNew, RoundedCornerShape(3.dp)).padding(horizontal = 4.dp, vertical = 2.5.dp),
+        )
+    }
+}
+
+@Composable
+internal fun FolderList(
+    folders: List<MediaFolder>, opts: ListViewOptions, showPath: Boolean,
+    /** Folders holding unplayed "NEW" videos; their icon gets a NEW tag. */
+    newFolders: Set<String> = emptySet(),
+    onOpen: (MediaFolder) -> Unit,
+) {
     if (opts.layout == ListLayout.Grid) {
         LazyVerticalGrid(GridCells.Adaptive(150.dp), Modifier.fillMaxSize(), contentPadding = PaddingValues(12.dp)) {
             items(folders, key = { it.path }) { f ->
                 Column(Modifier.clickable { onOpen(f) }.padding(6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    FolderGlyph(Modifier.size(width = 96.dp, height = 72.dp))
+                    FolderIcon(Modifier.size(width = 96.dp, height = 72.dp), f.path in newFolders)
                     Text(f.name, maxLines = 1, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.primary)
                     Text("${f.files.size} videos", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
@@ -109,7 +136,7 @@ internal fun FolderList(folders: List<MediaFolder>, opts: ListViewOptions, showP
         LazyColumn(Modifier.fillMaxSize()) {
             items(folders, key = { it.path }) { f ->
                 Row(Modifier.fillMaxWidth().height(62.dp).clickable { onOpen(f) }.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    FolderGlyph(Modifier.size(width = 62.dp, height = 46.dp))
+                    FolderIcon(Modifier.size(width = 62.dp, height = 46.dp), f.path in newFolders)
                     Spacer(Modifier.width(16.dp))
                     Column(Modifier.weight(1f)) {
                         Text(f.name.replaceFirstChar { it.uppercaseChar() }, fontSize = 15.sp, lineHeight = 18.sp, color = MaterialTheme.colorScheme.primary, maxLines = 1, overflow = TextOverflow.Ellipsis)

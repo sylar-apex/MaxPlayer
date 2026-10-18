@@ -98,7 +98,7 @@ fun HomeContent(state: HomeContract.State, navigation: HomeNavigation, onEvent: 
                     ViewMode.Files -> FileList(state.files, opts, emptyTitle = "No videos found.")
                     ViewMode.Folders, ViewMode.AllFolders -> {
                         if (state.folders.isEmpty()) LibraryEmptyState(state.loading, folderImport)
-                        else FolderList(state.folders, opts, showPath = opts.viewMode == ViewMode.AllFolders) { f: MediaFolder -> navigation.onFolder(f.path) }
+                        else FolderList(state.folders, opts, showPath = opts.viewMode == ViewMode.AllFolders, newFolders = state.newFolders) { f: MediaFolder -> navigation.onFolder(f.path) }
                     }
                 }
             }
