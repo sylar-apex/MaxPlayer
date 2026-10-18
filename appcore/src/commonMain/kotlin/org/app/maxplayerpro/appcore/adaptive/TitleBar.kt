@@ -25,6 +25,20 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -62,6 +76,15 @@ val TitleBarHeight: Dp = 52.dp
 class TitleBarHost {
     internal var page by mutableStateOf<TitleBarPage?>(null)
 
+    /** What is typed in the title bar's search box; the search page shows its results. */
+    var query by mutableStateOf("")
+
+    /** Counts Enter presses in the search box, so the search page can save the query to history. */
+    var submits by mutableStateOf(0)
+        private set
+
+    internal fun submit() { if (query.isNotBlank()) submits++ }
+
     /** Forgets the previous page's title and actions, e.g. on navigation to a page without a [WideHeader]. */
     fun clear() { page = null }
 }
@@ -83,7 +106,7 @@ internal fun PublishToTitleBar(host: TitleBarHost, page: TitleBarPage) {
 }
 
 /**
- * macOS title bar across the whole window, beside the traffic lights: the page title, then back, forward, search and
+ * macOS title bar across the whole window, beside the traffic lights: the page title, then back, forward, a search box and
  * refresh centred, the page's actions (grid / list) at the end. The divider below doubles as a progress line
  * while [refreshing].
  */
@@ -95,6 +118,8 @@ fun TitleBar(
     /** Browser-style history; null when there is nothing to go back / forward to. */
     onBack: (() -> Unit)?,
     onForward: (() -> Unit)?,
+    /** Typing in the search box: the shell opens the search page if it is not showing. */
+    onSearchTyped: () -> Unit,
 ) {
     val page = host.page
     val colors = MaterialTheme.colorScheme
@@ -107,7 +132,7 @@ fun TitleBar(
             Row(Modifier.align(Alignment.Center).widthIn(max = 560.dp), verticalAlignment = Alignment.CenterVertically) {
                 BarButton(Icons.AutoMirrored.Filled.ArrowBack, "Back", onBack)
                 BarButton(Icons.AutoMirrored.Filled.ArrowForward, "Forward", onForward)
-                SearchPill(Modifier.padding(horizontal = 8.dp).weight(1f), page?.onSearch)
+                SearchField(Modifier.padding(horizontal = 8.dp).weight(1f), host, onSearchTyped)
                 BarButton(Icons.Filled.Refresh, "Refresh", onRefresh.takeUnless { refreshing })
             }
             if (page != null) Row(Modifier.align(Alignment.CenterEnd), horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically, content = page.actions)
@@ -129,22 +154,45 @@ private fun BarButton(icon: ImageVector, label: String, onClick: (() -> Unit)?) 
     }
 }
 
-/** Looks like a search field; opens the search page. */
+/** The title bar's search box: typing searches as you go, Enter saves the search to history. */
 @Composable
-private fun SearchPill(modifier: Modifier, onClick: (() -> Unit)?) {
-    val source = remember { MutableInteractionSource() }
-    val hovered by source.collectIsHoveredAsState()
+private fun SearchField(modifier: Modifier, host: TitleBarHost, onType: () -> Unit) {
     val colors = MaterialTheme.colorScheme
     val shape = RoundedCornerShape(8.dp)
-    Row(
-        modifier.height(30.dp).clip(shape).background(colors.surfaceVariant)
-            .border(1.dp, if (hovered && onClick != null) colors.primary else colors.onSurface.copy(alpha = 0.08f), shape)
-            .hoverable(source).clickable(enabled = onClick != null, interactionSource = source, indication = null) { onClick?.invoke() }
-            .padding(horizontal = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Icon(Icons.Default.Search, null, Modifier.size(15.dp), tint = colors.onSurfaceVariant)
-        Spacer(Modifier.width(8.dp))
-        Text("Search videos", fontSize = 12.sp, color = colors.onSurfaceVariant, maxLines = 1)
-    }
+    val focused = remember { MutableInteractionSource() }
+    val isFocused by focused.collectIsFocusedAsState()
+    BasicTextField(
+        value = host.query,
+        onValueChange = { host.query = it; if (it.isNotBlank()) onType() },
+        singleLine = true,
+        interactionSource = focused,
+        textStyle = TextStyle(fontSize = 12.sp, lineHeight = 16.sp, color = colors.onSurface),
+        cursorBrush = SolidColor(colors.primary),
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+        keyboardActions = KeyboardActions(onSearch = { host.submit() }),
+        modifier = modifier.height(30.dp).onPreviewKeyEvent { e ->
+            when {
+                e.type != KeyEventType.KeyDown -> false
+                e.key == Key.Enter -> { host.submit(); true }
+                e.key == Key.Escape && host.query.isNotEmpty() -> { host.query = ""; true }
+                else -> false
+            }
+        },
+        decorationBox = { inner ->
+            Row(
+                Modifier.fillMaxSize().clip(shape).background(colors.surfaceVariant)
+                    .border(1.dp, if (isFocused) colors.onSurface.copy(alpha = 0.3f) else colors.onSurface.copy(alpha = 0.08f), shape)
+                    .padding(horizontal = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(Icons.Default.Search, null, Modifier.size(15.dp), tint = colors.onSurfaceVariant)
+                // Hint and typed text share one box, so the cursor starts exactly where the hint does.
+                Box(Modifier.padding(start = 8.dp).weight(1f), contentAlignment = Alignment.CenterStart) {
+                    if (host.query.isEmpty()) Text("Search videos", fontSize = 12.sp, lineHeight = 16.sp, color = colors.onSurfaceVariant, maxLines = 1)
+                    inner()
+                }
+                if (host.query.isNotEmpty()) Icon(Icons.Default.Close, "Clear", Modifier.size(15.dp).clip(RoundedCornerShape(50)).clickable { host.query = "" }, tint = colors.onSurfaceVariant)
+            }
+        },
+    )
 }

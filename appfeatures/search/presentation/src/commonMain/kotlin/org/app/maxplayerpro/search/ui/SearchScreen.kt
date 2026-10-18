@@ -15,6 +15,9 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
+import org.app.maxplayerpro.appcore.adaptive.LocalTitleBarHost
+import org.app.maxplayerpro.appcore.adaptive.WideHeader
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -34,11 +37,18 @@ fun SearchScreen(onBack: () -> Unit, viewModel: SearchViewModel = koinViewModel(
 
 @Composable
 fun SearchContent(state: SearchContract.State, onBack: () -> Unit, onEvent: (SearchContract.Event) -> Unit) {
+    // macOS wide windows: the query is typed in the title bar, so this page only shows results.
+    val bar = LocalTitleBarHost.current
     var query by rememberSaveable { mutableStateOf(state.query) }
     fun change(q: String) { query = q; onEvent(SearchContract.Event.QueryChanged(q)) }
+    if (bar != null) {
+        LaunchedEffect(bar.query) { if (bar.query != query) change(bar.query) }
+        LaunchedEffect(bar.submits) { if (bar.submits > 0) onEvent(SearchContract.Event.Submit(bar.query)) }
+    }
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        TopBar("Search", onBack = onBack)
-        OutlinedTextField(query, ::change, Modifier.fillMaxWidth().padding(horizontal = 16.dp), placeholder = { Text("Search videos") }, singleLine = true,
+        if (bar != null) WideHeader("Search", subtitle = if (query.isBlank()) null else "${state.results.size} results")
+        else TopBar("Search", onBack = onBack)
+        if (bar == null) OutlinedTextField(query, ::change, Modifier.fillMaxWidth().padding(horizontal = 16.dp), placeholder = { Text("Search videos") }, singleLine = true,
             keyboardActions = KeyboardActions(onSearch = { onEvent(SearchContract.Event.Submit(query)) }),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search))
         if (query.isBlank()) {
@@ -46,7 +56,7 @@ fun SearchContent(state: SearchContract.State, onBack: () -> Unit, onEvent: (Sea
                 LazyColumn {
                     item { Text("Recent searches", Modifier.padding(16.dp), color = MaterialTheme.colorScheme.onSurfaceVariant) }
                     items(state.history, key = { it }) { q ->
-                        Text(q, Modifier.fillMaxWidth().clickable { change(q) }.padding(horizontal = 16.dp, vertical = 10.dp))
+                        Text(q, Modifier.fillMaxWidth().clickable { if (bar != null) bar.query = q else change(q) }.padding(horizontal = 16.dp, vertical = 10.dp))
                     }
                 }
             }

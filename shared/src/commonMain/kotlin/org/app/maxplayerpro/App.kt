@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.unit.dp
 import androidx.navigation.compose.currentBackStackEntryAsState
 import kotlinx.coroutines.launch
+import androidx.navigation.NavDestination.Companion.hasRoute
+import com.psbapp.navigation.utils.push
 import org.koin.compose.koinInject
 import org.app.maxplayerpro.appcore.adaptive.LocalInTitleBar
 import org.app.maxplayerpro.appcore.adaptive.LocalTitleBarArea
@@ -69,12 +71,17 @@ fun App(startScreen: AppScreen? = null, embeddedPlayer: Boolean = false) {
                 val entry by navController.currentBackStackEntryAsState()
                 val history = remember(navController) { NavHistory(navController) }
                 // A page without a WideHeader must not keep the previous page's title.
-                LaunchedEffect(entry?.id) { titleBar.clear(); history.onPageChanged() }
+                LaunchedEffect(entry?.id) {
+                    titleBar.clear(); history.onPageChanged()
+                    // Leaving the results drops the search, so the box is empty on other pages.
+                    if (entry?.destination?.hasRoute<Routes.Search>() == false) titleBar.query = ""
+                }
                 val canBack = entry != null && navController.previousBackStackEntry != null
                 LocalTitleBarArea.current {
                     TitleBar(
                         titleBar, refreshing, onRefresh = { scope.launch { media.refresh() } },
                         onBack = history::back.takeIf { canBack }, onForward = history::forward.takeIf { history.canGoForward },
+                        onSearchTyped = { if (navController.currentDestination?.hasRoute<Routes.Search>() != true) navController.push(Routes.Search) },
                     )
                 }
             }
