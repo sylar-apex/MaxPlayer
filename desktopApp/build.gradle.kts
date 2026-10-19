@@ -57,6 +57,8 @@ abstract class PrepareVlc @Inject constructor(
                     // (Compose packages one installer per architecture).
                     val arch = if (System.getProperty("os.arch") == "aarch64") "arm64" else "x86_64"
                     listOf("lib", "plugins").forEach { exec.exec { commandLine("ditto", "--arch", arch, File(app, it).path, File(target, it).path) } }
+                    // Its timestamps no longer match after the copy, so libVLC would log every plugin as stale.
+                    File(target, "plugins/plugins.dat").delete()
                 } finally {
                     exec.exec { commandLine("hdiutil", "detach", mount.path, "-quiet") }
                     mount.delete()
@@ -106,8 +108,17 @@ compose.desktop {
 
         nativeDistributions {
             targetFormats(TargetFormat.Dmg, TargetFormat.Msi, TargetFormat.Deb)
-            packageName = "org.app.maxplayerpro"
+            packageName = "Max Player"
             packageVersion = "1.0.0"
+            // vlcj's callback video surface needs sun.misc.Unsafe; without it frames never allocate (audio only).
+            modules("jdk.unsupported")
+            macOS {
+                bundleID = "org.app.maxplayerpro"
+                dockName = "Max Player"
+                iconFile.set(project.file("icons/icon.icns"))
+            }
+            windows { iconFile.set(project.file("icons/icon.ico")) }
+            linux { iconFile.set(project.file("icons/icon.png")) }
             appResourcesRootDir.set(vlcResources)
         }
     }
