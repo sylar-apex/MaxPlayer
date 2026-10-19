@@ -57,8 +57,6 @@ abstract class PrepareVlc @Inject constructor(
                     // (Compose packages one installer per architecture).
                     val arch = if (System.getProperty("os.arch") == "aarch64") "arm64" else "x86_64"
                     listOf("lib", "plugins").forEach { exec.exec { commandLine("ditto", "--arch", arch, File(app, it).path, File(target, it).path) } }
-                    // Its timestamps no longer match after the copy, so libVLC would log every plugin as stale.
-                    File(target, "plugins/plugins.dat").delete()
                 } finally {
                     exec.exec { commandLine("hdiutil", "detach", mount.path, "-quiet") }
                     mount.delete()
@@ -100,6 +98,8 @@ val prepareVlc by tasks.registering(PrepareVlc::class) {
 compose.desktop {
     application {
         mainClass = "org.app.maxplayerpro.MainKt"
+        // Trackpad pinch zoom reads macOS gesture events from this non-exported AWT package.
+        jvmArgs += "--add-exports=java.desktop/com.apple.eawt.event=ALL-UNNAMED"
         // `-PvlcPath=<dir with libvlc>` runs against a specific VLC build instead of the bundled one.
         providers.gradleProperty("vlcPath").orNull?.let { jvmArgs += "-Dvlc.path=$it" }
         providers.gradleProperty("vlcVerbose").orNull?.let { jvmArgs += "-Dvlc.verbose=true" }
@@ -116,6 +116,45 @@ compose.desktop {
                 bundleID = "org.app.maxplayerpro"
                 dockName = "Max Player"
                 iconFile.set(project.file("icons/icon.icns"))
+                // Lists the app under Finder's "Open With" for video and audio files.
+                infoPlist {
+                    extraKeysRawXml = """
+                        <key>CFBundleDocumentTypes</key>
+                        <array>
+                            <dict>
+                                <key>CFBundleTypeName</key><string>Media</string>
+                                <key>CFBundleTypeRole</key><string>Viewer</string>
+                                <key>LSHandlerRank</key><string>Alternate</string>
+                                <key>LSItemContentTypes</key>
+                                <array>
+                                    <string>public.movie</string>
+                                    <string>public.video</string>
+                                    <string>public.audiovisual-content</string>
+                                    <string>public.audio</string>
+                                    <string>org.matroska.mkv</string>
+                                    <string>org.webmproject.webm</string>
+                                    <string>public.avi</string>
+                                    <string>public.mpeg-4</string>
+                                    <string>com.apple.quicktime-movie</string>
+                                </array>
+                            </dict>
+                            <dict>
+                                <key>CFBundleTypeName</key><string>Media file</string>
+                                <key>CFBundleTypeRole</key><string>Viewer</string>
+                                <key>LSHandlerRank</key><string>Alternate</string>
+                                <key>CFBundleTypeExtensions</key>
+                                <array>
+                                    <string>mkv</string><string>mp4</string><string>m4v</string><string>mov</string><string>avi</string>
+                                    <string>wmv</string><string>flv</string><string>webm</string><string>ts</string><string>m2ts</string>
+                                    <string>mts</string><string>mpg</string><string>mpeg</string><string>vob</string><string>3gp</string>
+                                    <string>rm</string><string>rmvb</string><string>ogv</string><string>dv</string>
+                                    <string>mp3</string><string>m4a</string><string>flac</string><string>wav</string><string>aac</string>
+                                    <string>ogg</string><string>opus</string><string>wma</string><string>wv</string>
+                                </array>
+                            </dict>
+                        </array>
+                    """.trimIndent()
+                }
             }
             windows { iconFile.set(project.file("icons/icon.ico")) }
             linux { iconFile.set(project.file("icons/icon.png")) }

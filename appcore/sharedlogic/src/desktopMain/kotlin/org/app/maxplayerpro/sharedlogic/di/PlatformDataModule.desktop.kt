@@ -11,10 +11,45 @@ import org.koin.core.module.Module
 import org.koin.dsl.module
 import java.util.prefs.Preferences
 
+/**
+ * Java preferences cap each value at [Preferences.MAX_VALUE_LENGTH] (8192) characters, and user data (history,
+ * folders, playlists) outgrows that. Longer values are split across `key#0`, `key#1`, … with the count stored
+ * under `key` behind [CHUNKED], so callers still see one string.
+ */
 private class PreferencesStore(private val node: Preferences) : KeyValueStore {
-    override fun getString(key: String): String? = node.get(key, null)
-    override fun putString(key: String, value: String?) { if (value == null) node.remove(key) else node.put(key, value) }
-    override fun keys(): Set<String> = node.keys().toSet()
+    override fun getString(key: String): String? {
+        val raw = node.get(key, null) ?: return null
+        val count = raw.removePrefix(CHUNKED).takeIf { raw.startsWith(CHUNKED) }?.toIntOrNull() ?: return raw
+        return buildString { repeat(count) { append(node.get(chunkKey(key, it), "")) } }
+    }
+
+    override fun putString(key: String, value: String?) {
+        removeChunks(key)
+        when {
+            value == null -> node.remove(key)
+            value.length <= Preferences.MAX_VALUE_LENGTH && !value.startsWith(CHUNKED) -> node.put(key, value)
+            else -> {
+                val parts = value.chunked(Preferences.MAX_VALUE_LENGTH)
+                parts.forEachIndexed { i, part -> node.put(chunkKey(key, i), part) }
+                node.put(key, CHUNKED + parts.size)
+            }
+        }
+    }
+
+    override fun keys(): Set<String> = node.keys().filterNot { CHUNK_SEPARATOR in it }.toSet()
+
+    private fun removeChunks(key: String) {
+        val raw = node.get(key, null) ?: return
+        if (!raw.startsWith(CHUNKED)) return
+        repeat(raw.removePrefix(CHUNKED).toIntOrNull() ?: 0) { node.remove(chunkKey(key, it)) }
+    }
+
+    private fun chunkKey(key: String, index: Int) = "$key$CHUNK_SEPARATOR$index"
+
+    private companion object {
+        const val CHUNKED = "\u0001chunks:"
+        const val CHUNK_SEPARATOR = "#"
+    }
 }
 
 actual fun platformDataModule(): Module = module {

@@ -32,19 +32,24 @@ import org.app.maxplayerpro.di.initApp
 import org.app.maxplayerpro.sharedlogic.data.DesktopMediaRepository
 import org.app.maxplayerpro.sharedlogic.data.MediaRepository
 import org.koin.mp.KoinPlatform
+import java.awt.Desktop
 import java.io.File
+import kotlinx.coroutines.flow.MutableStateFlow
 
 /** Files given on the command line (or by "Open with") start playing straight away. */
 fun main(args: Array<String>) {
     // Load libVLC off the UI thread so the window never waits for it.
-    Thread({ DesktopPlayback.engine }, "libvlc-init").apply { isDaemon = true }.start()
-    runApp(args)
+    DesktopPlayback.warmUp()
+    val opened = MutableStateFlow(args.map(::File).filter { it.isFile })
+    // macOS hands "Open With" / double-clicked files over as an Apple Event, not as arguments.
+    if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.APP_OPEN_FILE)) {
+        Desktop.getDesktop().setOpenFileHandler { e -> opened.value = e.files.filter { it.isFile } }
+    }
+    runApp(opened)
 }
 
-private fun runApp(args: Array<String>) = application {
+private fun runApp(opened: MutableStateFlow<List<File>>) = application {
     initApp()
-    val files = args.map(::File).filter { it.isFile }.map { it.toMediaFile() }
-    if (files.isNotEmpty()) KMediaPlayer.playVideo(files, 0)
     val windowState = rememberWindowState(size = DpSize(1360.dp, 860.dp), position = WindowPosition(Alignment.Center))
     // The player's rotate button toggles full screen on desktop.
     PlatformVideoTools.fullscreenToggle = {
@@ -55,6 +60,14 @@ private fun runApp(args: Array<String>) = application {
         title = "Max Player Pro",
         state = windowState,
     ) {
+        // Plays files opened from Finder (at launch or while running) once the app is up.
+        LaunchedEffect(opened) {
+            opened.collect { files ->
+                if (files.isEmpty()) return@collect
+                KMediaPlayer.playVideo(files.map { it.toMediaFile() }, 0)
+                opened.value = emptyList()
+            }
+        }
         // Keeps the player's full-screen button in sync, including the green window button and Esc.
         LaunchedEffect(windowState) {
             snapshotFlow { windowState.placement }.collect { PlatformVideoTools.onFullscreenChanged(it == WindowPlacement.Fullscreen) }
@@ -73,6 +86,7 @@ private fun runApp(args: Array<String>) = application {
                 putClientProperty("apple.awt.transparentTitleBar", true)
                 putClientProperty("apple.awt.windowTitleVisible", false)
             }
+            if (mac) PlatformVideoTools.installPinchZoom(window.rootPane)
         }
         MaxTheme {
             Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {

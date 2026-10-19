@@ -2,6 +2,16 @@ package org.app.maxplayerpro
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Text
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -110,8 +120,32 @@ fun App(startScreen: AppScreen? = null, embeddedPlayer: Boolean = false) {
 private fun EmbeddedPlayer() {
     val requested by KMediaPlayer.videoRequested.collectAsState()
     if (!requested) return
+    // First open after launch: libVLC may still be loading. Show the player with a loader instead of freezing the window.
+    val ready by KMediaPlayer.engineReady.collectAsState()
+    if (ready) ReadyPlayer() else PlayerInitialising()
+}
+
+@Composable
+private fun ReadyPlayer() {
     val scope = rememberCoroutineScope()
     val window = remember { ComposePlayerWindow(scope) { KMediaPlayer.videoRequested.value = false } }
     LaunchedEffect(window) { if (!window.startPending()) KMediaPlayer.videoRequested.value = false }
     MaxPlayerContent(window)
+}
+
+@Composable
+private fun PlayerInitialising() {
+    Box(
+        // Swallows clicks so the library underneath stays untouched while the player gets ready.
+        Modifier.fillMaxSize().background(Color.Black).pointerInput(Unit) { awaitPointerEventScope { while (true) awaitPointerEvent() } },
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            CircularProgressIndicator(Modifier.size(28.dp), color = Color.White, strokeWidth = 2.5.dp)
+            Spacer(Modifier.height(14.dp))
+            Text("Initialising player…", color = Color.White, fontSize = 14.sp)
+            Spacer(Modifier.height(4.dp))
+            Text("Loading video codecs for the first time", color = Color.White.copy(alpha = 0.6f), fontSize = 12.sp)
+        }
+    }
 }
