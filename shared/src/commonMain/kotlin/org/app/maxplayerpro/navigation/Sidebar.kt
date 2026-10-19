@@ -1,6 +1,5 @@
 package org.app.maxplayerpro.navigation
 
-import org.app.maxplayerpro.appcore.adaptive.LocalInTitleBar
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -97,7 +96,7 @@ internal fun Sidebar(navController: NavController, modifier: Modifier = Modifier
             .padding(horizontal = 14.dp),
     ) {
         // Compact brand row: one line, with a small PRO chip.
-        Row(Modifier.padding(start = 10.dp, top = if (LocalInTitleBar.current) 16.dp else 40.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.padding(start = 10.dp, top = 16.dp, bottom = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             Image(painterResource(Res.drawable.app_logo), null, Modifier.size(26.dp).clip(RoundedCornerShape(7.dp)))
             Spacer(Modifier.width(10.dp))
             Text("Max Player", fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onBackground)

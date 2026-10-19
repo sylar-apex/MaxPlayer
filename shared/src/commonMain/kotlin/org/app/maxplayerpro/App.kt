@@ -31,7 +31,6 @@ import kotlinx.coroutines.launch
 import androidx.navigation.NavDestination.Companion.hasRoute
 import com.psbapp.navigation.utils.push
 import org.koin.compose.koinInject
-import org.app.maxplayerpro.appcore.adaptive.LocalInTitleBar
 import org.app.maxplayerpro.appcore.adaptive.LocalTitleBarArea
 import org.app.maxplayerpro.appcore.adaptive.LocalTitleBarHost
 import org.app.maxplayerpro.appcore.adaptive.TitleBar
@@ -71,8 +70,9 @@ fun App(startScreen: AppScreen? = null, embeddedPlayer: Boolean = false) {
         val navController = rememberNavController()
         ProvideWindowClass {
             val wide = LocalWindowClass.current.isWide
-            // macOS wide windows: one bar across the window top, in the title bar (dragging it moves the window).
-            val inTitle = wide && LocalInTitleBar.current
+            // Every wide window (macOS, Windows, Linux, browser) gets the same bar across the top; on macOS it sits in the
+            // title bar beside the traffic lights. Phones and tablets keep in-page headers everywhere.
+            val inTitle = wide
             val titleBar = remember { TitleBarHost() }
             if (inTitle) {
                 val media = koinInject<MediaRepository>()

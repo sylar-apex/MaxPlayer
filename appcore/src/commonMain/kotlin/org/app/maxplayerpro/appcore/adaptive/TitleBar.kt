@@ -62,7 +62,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-/** True when the app draws into the window title bar (macOS transparent title bar), so pages put their header there. */
+/** True when the app draws under the window's own controls (macOS traffic lights), so the top bar leaves room for them. */
 val LocalInTitleBar = staticCompositionLocalOf { false }
 
 /** Wraps title-bar content so dragging it moves the window (desktop); plain content elsewhere. */
@@ -106,7 +106,7 @@ internal fun PublishToTitleBar(host: TitleBarHost, page: TitleBarPage) {
 }
 
 /**
- * macOS title bar across the whole window, beside the traffic lights: the page title, then back, forward, a search box and
+ * The wide-window top bar on every platform (beside the traffic lights on macOS): the page title, then back, forward, a search box and
  * refresh centred, the page's actions (grid / list) at the end. The divider below doubles as a progress line
  * while [refreshing].
  */
@@ -124,7 +124,7 @@ fun TitleBar(
     val page = host.page
     val colors = MaterialTheme.colorScheme
     Column(Modifier.fillMaxWidth().height(TitleBarHeight).background(colors.surface)) {
-        Box(Modifier.fillMaxWidth().weight(1f).padding(start = 84.dp, end = 12.dp)) {
+        Box(Modifier.fillMaxWidth().weight(1f).padding(start = if (LocalInTitleBar.current) 84.dp else 16.dp, end = 12.dp)) {
             if (page != null) Column(Modifier.align(Alignment.CenterStart).widthIn(max = 260.dp)) {
                 Text(page.title, fontSize = 15.sp, lineHeight = 18.sp, fontWeight = FontWeight.Bold, color = colors.onBackground, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (page.subtitle != null) Text(page.subtitle, fontSize = 11.sp, lineHeight = 13.sp, color = colors.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
