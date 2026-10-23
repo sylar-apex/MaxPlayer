@@ -286,7 +286,8 @@ private class ChannelContent(
         file.use { ch ->
             ch.position(range.first)
             var remaining = range.last - range.first + 1
-            val buf = ByteBuffer.allocate(64 * 1024)
+            // Large reads: fewer system calls and socket writes per second for high-bitrate video.
+            val buf = ByteBuffer.allocate(512 * 1024)
             while (remaining > 0) {
                 buf.clear()
                 if (remaining < buf.capacity()) buf.limit(remaining.toInt())
