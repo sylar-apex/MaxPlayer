@@ -277,7 +277,6 @@ class LocalNetworkViewModel(
         val query = listOfNotNull(access?.deviceToken?.let { "d=$it" }, access?.shareTokens?.get(share.id)?.takeIf { it.isNotEmpty() }?.let { "t=$it" })
             .joinToString("&").let { if (it.isEmpty()) "" else "?$it" }
         downloader.start(open.baseUrl + path + query, name.ifBlank { item.name }, item.sizeBytes, item.mimeType, location)
-        operations.toast("Downloading ${name.ifBlank { item.name }}")
     }
 
     private fun editOpen(change: (OpenDevice) -> OpenDevice) = updateState { copy(open = open?.let(change)) }

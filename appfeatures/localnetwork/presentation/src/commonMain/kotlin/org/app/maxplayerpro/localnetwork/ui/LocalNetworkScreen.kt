@@ -1,5 +1,7 @@
 package org.app.maxplayerpro.localnetwork.ui
 
+import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.CheckCircle
 import org.app.maxplayerpro.sharedlogic.platform.PlatformApp
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
@@ -532,33 +534,60 @@ private fun LockMark() {
 
 private fun countLabel(n: Int, audio: Boolean): String = if (audio) "$n ${if (n == 1) "song" else "songs"}" else "$n ${if (n == 1) "video" else "videos"}"
 
-/** Downloads in progress and just finished: progress, cancel, and where finished ones were saved. */
+/** Downloads in progress and just finished, as a card at the bottom: status badge, name, progress or where it was saved. */
 @Composable
 private fun DownloadsPanel(tasks: List<DownloadTask>, onEvent: (Event) -> Unit) {
     if (tasks.isEmpty()) return
-    Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant).navigationBarsPadding().padding(horizontal = 16.dp, vertical = 8.dp)) {
+    val running = tasks.count { it.state == DownloadState.Running }
+    Column(
+        Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp))
+            .navigationBarsPadding().padding(start = 16.dp, end = 8.dp, top = 6.dp, bottom = 8.dp),
+    ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Downloads", Modifier.weight(1f), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-            if (tasks.any { it.state != DownloadState.Running }) TextButton({ onEvent(Event.ClearDownloads) }) { Text("Clear") }
+            Icon(Icons.Default.Download, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+            Spacer(Modifier.width(8.dp))
+            Text(if (running > 0) "Downloading $running" else "Downloads", Modifier.weight(1f), fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            if (running < tasks.size) TextButton({ onEvent(Event.ClearDownloads) }) { Text("Clear") }
         }
-        tasks.takeLast(4).forEach { t ->
-            Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text(t.name, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                    when (t.state) {
-                        DownloadState.Running -> {
-                            val p = if (t.sizeBytes > 0) t.doneBytes.toFloat() / t.sizeBytes else 0f
-                            LinearProgressIndicator({ p }, Modifier.fillMaxWidth().padding(vertical = 4.dp))
-                            Text("${formatSize(t.doneBytes)} of ${formatSize(t.sizeBytes)} · ${(p * 100).toInt()}%", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        }
-                        DownloadState.Done -> Text("Saved to ${t.detail}", fontSize = 11.sp, color = SharedGreen, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        DownloadState.Failed -> Text(t.detail ?: "Failed", fontSize = 11.sp, color = MaterialTheme.colorScheme.error)
-                        DownloadState.Cancelled -> Text("Cancelled", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
+        tasks.takeLast(4).forEach { t -> DownloadRow(t, onEvent) }
+    }
+}
+
+@Composable
+private fun DownloadRow(t: DownloadTask, onEvent: (Event) -> Unit) {
+    val progress = if (t.sizeBytes > 0) (t.doneBytes.toFloat() / t.sizeBytes).coerceIn(0f, 1f) else 0f
+    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) {
+            when (t.state) {
+                DownloadState.Running -> {
+                    CircularProgressIndicator({ progress }, Modifier.fillMaxSize(), strokeWidth = 3.dp)
+                    Text("${(progress * 100).toInt()}", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                 }
-                if (t.state == DownloadState.Running) IconButton({ onEvent(Event.CancelDownload(t.id)) }) { Icon(Icons.Default.Close, "Cancel download") }
+                DownloadState.Done -> Icon(Icons.Default.CheckCircle, "Done", Modifier.size(30.dp), tint = SharedGreen)
+                DownloadState.Failed -> Icon(Icons.Default.Error, "Failed", Modifier.size(30.dp), tint = MaterialTheme.colorScheme.error)
+                DownloadState.Cancelled -> Icon(Icons.Default.Close, "Cancelled", Modifier.size(26.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(t.name, fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                when (t.state) {
+                    DownloadState.Running -> "${formatSize(t.doneBytes)} of ${formatSize(t.sizeBytes)}"
+                    // Show the folder, not the file name again.
+                    DownloadState.Done -> "Saved in " + (t.detail?.substringBeforeLast('/', "")?.substringAfterLast('/')?.ifEmpty { null } ?: "Downloads")
+                    DownloadState.Failed -> t.detail ?: "Download failed"
+                    DownloadState.Cancelled -> "Cancelled"
+                },
+                fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                color = when (t.state) {
+                    DownloadState.Done -> SharedGreen
+                    DownloadState.Failed -> MaterialTheme.colorScheme.error
+                    else -> MaterialTheme.colorScheme.onSurfaceVariant
+                },
+            )
+        }
+        if (t.state == DownloadState.Running) IconButton({ onEvent(Event.CancelDownload(t.id)) }) { Icon(Icons.Default.Close, "Cancel download") }
     }
 }
 
