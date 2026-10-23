@@ -38,6 +38,20 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Wifi
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import org.app.maxplayerpro.sharedlogic.usecase.NetworkShareRequests
 import org.app.kmediaplayer.util.formatSize
 import org.app.maxplayerpro.appcore.theme.MaxColors
 import org.app.maxplayerpro.appres.resources.Res
@@ -72,6 +86,26 @@ private fun Chip(icon: DrawableResource, label: String, onClick: () -> Unit) {
         Icon(painterResource(icon), null, Modifier.size(18.dp))
         Spacer(Modifier.width(4.dp))
         Text(label, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun FolderActionsSheet(folder: MediaFolder, onDismiss: () -> Unit) {
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Text(folder.name, Modifier.padding(horizontal = 20.dp, vertical = 8.dp), fontSize = 16.sp, fontWeight = FontWeight.SemiBold, maxLines = 2)
+        Row(
+            Modifier.fillMaxWidth().height(48.dp).clickable { onDismiss(); NetworkShareRequests.request(folder.files, folder.path) }.padding(horizontal = 20.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(Icons.Default.Wifi, null, Modifier.size(22.dp))
+            Spacer(Modifier.width(20.dp))
+            Column {
+                Text("Share on network", fontSize = 15.sp)
+                Text("Public, protected with a PIN, or private", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        Spacer(Modifier.navigationBarsPadding().height(12.dp))
     }
 }
 
@@ -125,10 +159,13 @@ internal fun FolderList(
     newFolders: Set<String> = emptySet(),
     onOpen: (MediaFolder) -> Unit,
 ) {
+    // Long-press (or ⋮ in the list) offers folder actions; today that is sharing the whole folder on the network.
+    var menuFor by remember { mutableStateOf<MediaFolder?>(null) }
+    menuFor?.let { f -> FolderActionsSheet(f) { menuFor = null } }
     if (opts.layout == ListLayout.Grid) {
         LazyVerticalGrid(GridCells.Adaptive(150.dp), Modifier.fillMaxSize(), contentPadding = PaddingValues(12.dp)) {
             items(folders, key = { it.path }) { f ->
-                Column(Modifier.clickable { onOpen(f) }.padding(6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Column(Modifier.combinedClickable(onClick = { onOpen(f) }, onLongClick = { menuFor = f }).padding(6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                     FolderIcon(Modifier.size(width = 96.dp, height = 72.dp), f.path in newFolders)
                     Text(f.name, maxLines = 1, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.primary)
                     Text("${f.files.size} ${if (f.files.size == 1) "video" else "videos"}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -138,7 +175,7 @@ internal fun FolderList(
     } else {
         LazyColumn(Modifier.fillMaxSize()) {
             items(folders, key = { it.path }) { f ->
-                Row(Modifier.fillMaxWidth().height(62.dp).clickable { onOpen(f) }.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxWidth().height(62.dp).combinedClickable(onClick = { onOpen(f) }, onLongClick = { menuFor = f }).padding(start = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                     FolderIcon(Modifier.size(width = 62.dp, height = 46.dp), f.path in newFolders)
                     Spacer(Modifier.width(16.dp))
                     Column(Modifier.weight(1f)) {
@@ -151,6 +188,7 @@ internal fun FolderList(
                         Text(extra, fontSize = 12.sp, lineHeight = 15.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         if (showPath || ListField.Path in opts.fields) Text(f.path, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     }
+                    IconButton({ menuFor = f }) { Icon(Icons.Default.MoreVert, "Folder actions", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
                 }
             }
         }

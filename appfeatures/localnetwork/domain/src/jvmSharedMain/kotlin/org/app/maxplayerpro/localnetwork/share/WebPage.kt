@@ -28,6 +28,7 @@ internal val WEB_PAGE = """
   .item span:first-child { word-break:break-all; }
   form { display:flex; gap:8px; padding:0 14px 12px; }
   input { flex:1; min-width:0; padding:8px 10px; border-radius:8px; border:1px solid var(--line); background:var(--bg); color:var(--text); font-size:16px; letter-spacing:2px; }
+  form { padding-top:0; }
   button { padding:8px 14px; border:0; border-radius:8px; background:var(--accent); color:#fff; font-weight:600; cursor:pointer; }
   .err { color:var(--bad); font-size:13px; padding:0 14px 10px; }
   .empty { color:var(--muted); text-align:center; padding:40px 0; }
@@ -42,64 +43,97 @@ internal val WEB_PAGE = """
   <div id="list"></div>
 </main>
 <script>
-const tokens = JSON.parse(sessionStorage.getItem('tokens') || '{}');
+// PINs are remembered as the tokens they return, per device, until the owner logs everyone out.
+const keyOf = (id) => 'mp-share-' + id;
+let device = null, access = { d: null, t: {} };
 const unlocked = {};
 const ${'$'} = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const size = (b) => b > 1e9 ? (b/1e9).toFixed(2)+' GB' : (b/1e6).toFixed(1)+' MB';
 const dur = (ms) => { if (!ms) return ''; const s = Math.round(ms/1000), h = Math.floor(s/3600), m = Math.floor(s%3600/60), x = s%60;
   return (h ? h+':'+String(m).padStart(2,'0') : m) + ':' + String(x).padStart(2,'0'); };
-const until = (ms) => ms ? 'Until ' + new Date(ms).toLocaleString() : 'No expiry';
+const until = (ms) => ms ? 'Until ' + new Date(ms).toLocaleString() : 'No time limit';
+const save = () => { try { localStorage.setItem(keyOf(device.id), JSON.stringify(access)); } catch (e) {} };
+const headers = (t) => { const h = {}; if (access.d) h['X-Device-Token'] = access.d; if (t) h['X-Share-Token'] = t; return h; };
 
 async function load() {
   try {
-    const info = await (await fetch('/api/v1/info')).json();
-    ${'$'}('title').textContent = info.name;
-    const shares = await (await fetch('/api/v1/shares')).json();
+    device = await (await fetch('/api/v1/info')).json();
+    ${'$'}('title').textContent = device.name;
+    try { access = JSON.parse(localStorage.getItem(keyOf(device.id))) || access; } catch (e) {}
+    if (device.pinRequired && !access.d) return askDevicePin();
+    const r = await fetch('/api/v1/shares', { headers: headers() });
+    if (r.status === 401) { access = { d: null, t: {} }; save(); return askDevicePin(); }
+    if (r.status === 410) { ${'$'}('sub').textContent = 'Sharing time is over'; return; }
+    const shares = await r.json();
+    for (const s of shares.filter(s => s.locked && access.t[s.id])) {
+      const one = await fetch('/api/v1/shares/' + s.id, { headers: headers(access.t[s.id]) });
+      if (one.ok) unlocked[s.id] = await one.json(); else { delete access.t[s.id]; save(); }
+    }
     ${'$'}('sub').textContent = shares.length + (shares.length === 1 ? ' share' : ' shares') + ' on this device';
     render(shares);
   } catch (e) { ${'$'}('sub').textContent = 'Device not reachable'; }
+}
+
+function pinForm(label, onPin) {
+  const wrap = document.createElement('div');
+  const form = document.createElement('form');
+  form.innerHTML = '<input type="password" inputmode="numeric" autocomplete="off" placeholder="' + label + '"><button>Open</button>';
+  const err = document.createElement('div'); err.className = 'err';
+  form.onsubmit = async (ev) => { ev.preventDefault(); err.textContent = await onPin(form.querySelector('input').value) || ''; };
+  wrap.appendChild(form); wrap.appendChild(err);
+  return wrap;
+}
+
+const failText = (status) => status === 429 ? 'Too many wrong PINs. Wait a minute.' : status === 410 ? 'Sharing time is over.' : 'Wrong PIN.';
+
+function askDevicePin() {
+  ${'$'}('sub').textContent = 'This device has a PIN';
+  const list = ${'$'}('list'); list.innerHTML = '';
+  const box = document.createElement('div'); box.className = 'share';
+  box.innerHTML = '<div class="head"><b>Enter the device PIN</b><span class="meta">Asked once on this browser</span></div>';
+  box.appendChild(pinForm('Device PIN', async (pin) => {
+    const r = await fetch('/api/v1/login', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ pin }) });
+    if (!r.ok) return failText(r.status);
+    access = { d: (await r.json()).token, t: {} }; save(); load();
+  }));
+  list.appendChild(box);
 }
 
 function render(shares) {
   const list = ${'$'}('list');
   if (!shares.length) { list.innerHTML = '<div class="empty">Nothing is shared right now.</div>'; return; }
   list.innerHTML = '';
+  shares.sort((a, b) => (b.folder - a.folder) || a.title.localeCompare(b.title));
   for (const s of shares) {
     const open = unlocked[s.id] || (!s.locked ? s : null);
     const el = document.createElement('div');
     el.className = 'share';
-    el.innerHTML = '<div class="head"><b>' + esc(s.title) + '</b><span class="meta">' + (s.locked ? '🔒 ' : '') +
+    el.innerHTML = '<div class="head"><b>' + (s.folder ? '📁 ' : '') + esc(s.title) + '</b><span class="meta">' + (s.locked ? '🔒 Protected · ' : '') +
       s.itemCount + (s.itemCount === 1 ? ' file' : ' files') + ' · ' + until(s.expiresAtMs) + '</span></div>';
     if (open) {
       for (const it of open.items) {
         const row = document.createElement('div');
         row.className = 'item';
         row.innerHTML = '<span>' + esc(it.name) + '</span><span class="meta">' + [dur(it.durationMs), size(it.sizeBytes)].filter(Boolean).join(' · ') + '</span>';
-        row.onclick = () => play(it, tokens[s.id]);
+        row.onclick = () => play(it, access.t[s.id]);
         el.appendChild(row);
       }
     } else {
-      const form = document.createElement('form');
-      form.innerHTML = '<input inputmode="numeric" autocomplete="one-time-code" placeholder="Enter code"><button>Unlock</button>';
-      const err = document.createElement('div');
-      err.className = 'err';
-      form.onsubmit = async (ev) => {
-        ev.preventDefault();
-        const r = await fetch('/api/v1/shares/' + s.id + '/unlock', { method:'POST', headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ code: form.querySelector('input').value }) });
-        if (r.ok) { const u = await r.json(); tokens[s.id] = u.token; unlocked[s.id] = u.share;
-          sessionStorage.setItem('tokens', JSON.stringify(tokens)); render(shares); }
-        else err.textContent = r.status === 429 ? 'Too many wrong codes. Wait a minute.' : r.status === 410 ? 'This share has expired.' : 'Wrong code.';
-      };
-      el.appendChild(form); el.appendChild(err);
+      el.appendChild(pinForm('PIN for this share', async (pin) => {
+        const r = await fetch('/api/v1/shares/' + s.id + '/unlock', { method:'POST', headers: Object.assign({'Content-Type':'application/json'}, headers()),
+          body: JSON.stringify({ code: pin }) });
+        if (!r.ok) return failText(r.status);
+        const u = await r.json(); access.t[s.id] = u.token; unlocked[s.id] = u.share; save(); render(shares);
+      }));
     }
     list.appendChild(el);
   }
 }
 
 function play(item, token) {
-  const url = item.path + (token ? '?t=' + encodeURIComponent(token) : '');
+  const q = [access.d && 'd=' + encodeURIComponent(access.d), token && 't=' + encodeURIComponent(token)].filter(Boolean).join('&');
+  const url = item.path + (q ? '?' + q : '');
   const v = ${'$'}('video'), a = ${'$'}('audio');
   const el = item.isAudio ? a : v, other = item.isAudio ? v : a;
   other.pause(); other.style.display = 'none';

@@ -5,25 +5,46 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import org.app.kmediaplayer.model.MediaFile
 import org.app.kmediaplayer.settings.KeyValueStore
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
+/** Device-wide sharing settings. [sessionEpoch] goes up on "log out all devices"; tokens from older epochs stop working. */
+@Serializable
+data class DeviceSharing(
+    val pin: String? = null,
+    val untilMs: Long? = null,
+    val sessionEpoch: Int = 0,
+)
+
+/** PINs this device entered on another device, kept as the tokens they returned until that device logs us out. */
+@Serializable
+data class RememberedAccess(val deviceToken: String? = null, val shareTokens: Map<String, String> = emptyMap())
+
 /**
- * The shares this device offers, saved across restarts. Changes run one at a time under [lock] and replace the
- * whole immutable list, so the server always reads a consistent snapshot without locking and the saved copy
- * never falls behind the one in memory.
+ * The shares this device offers and its sharing settings, saved across restarts. Changes run one at a time under
+ * [lock] and replace whole immutable values, so the server always reads a consistent snapshot without locking and
+ * the saved copy never falls behind the one in memory.
  */
 class ShareStore(private val store: KeyValueStore) {
     private val json = Json { ignoreUnknownKeys = true }
     private val lock = Mutex()
-    private val _shares = MutableStateFlow(load())
+    private val _shares = MutableStateFlow(decode(KEY_SHARES) ?: emptyList<Share>())
     val shares: StateFlow<List<Share>> = _shares.asStateFlow()
+    private val _device = MutableStateFlow(decode(KEY_DEVICE) ?: DeviceSharing())
+    val device: StateFlow<DeviceSharing> = _device.asStateFlow()
+    private val _remembered = MutableStateFlow(decode(KEY_REMEMBERED) ?: emptyMap<String, RememberedAccess>())
+    /** Keyed by the other device's id. */
+    val remembered: StateFlow<Map<String, RememberedAccess>> = _remembered.asStateFlow()
 
     /** This device's stable id, so others can tell it apart across address changes. */
     val deviceId: String = store.getString(KEY_DEVICE_ID) ?: newId().also { store.putString(KEY_DEVICE_ID, it) }
+
+    /** Signs access tokens; never leaves this device. */
+    val tokenSecret: String = store.getString(KEY_SECRET) ?: (newId() + newId()).also { store.putString(KEY_SECRET, it) }
 
     var hostingEnabled: Boolean
         get() = store.getString(KEY_HOSTING) == "1"
@@ -31,39 +52,77 @@ class ShareStore(private val store: KeyValueStore) {
 
     /** Addresses the user typed in, for devices discovery cannot see (other subnets, the browser build). */
     var savedAddresses: List<String>
-        get() = store.getString(KEY_SAVED)?.let { runCatching { json.decodeFromString<List<String>>(it) }.getOrNull() } ?: emptyList()
+        get() = decode<List<String>>(KEY_SAVED) ?: emptyList()
         set(value) = store.putString(KEY_SAVED, json.encodeToString(value.distinct()))
 
-    suspend fun create(
+    /**
+     * Shares [files] (one file, or a folder's files when [folderPath] is set). Sharing the same folder or single file
+     * again replaces its share, keeping the id so devices that already unlocked it keep their access.
+     */
+    suspend fun save(
         title: String,
         files: List<MediaFile>,
+        folderPath: String?,
         access: ShareAccess,
-        code: String?,
+        pin: String?,
         nowMs: Long,
         startsAtMs: Long?,
         expiresAtMs: Long?,
     ): Share {
-        val share = Share(
-            id = newId(),
-            title = title.ifBlank { files.firstOrNull()?.title ?: "Shared files" },
-            items = files.mapIndexed { i, f ->
-                SharedItem("$i", f.uri, f.path, f.name, f.sizeBytes, f.durationMs, f.mimeType.ifEmpty { guessMime(f.name, f.isAudio) }, f.isAudio, f.width, f.height)
-            },
-            access = access,
-            code = if (access == ShareAccess.Code) code?.filter { it.isLetterOrDigit() }?.ifEmpty { null } ?: newCode() else null,
-            createdAtMs = nowMs,
-            startsAtMs = startsAtMs,
-            expiresAtMs = expiresAtMs,
-        )
-        mutate { it + share }
-        return share
+        var saved: Share? = null
+        mutate { list ->
+            val existing = list.firstOrNull { it.matches(files, folderPath) }
+            val share = Share(
+                id = existing?.id ?: newId(),
+                title = title.ifBlank { files.firstOrNull()?.title ?: "Shared files" },
+                items = files.mapIndexed { i, f ->
+                    SharedItem("$i", f.uri, f.path, f.name, f.sizeBytes, f.durationMs, f.mimeType.ifEmpty { guessMime(f.name, f.isAudio) }, f.isAudio, f.width, f.height)
+                },
+                access = access,
+                code = if (access == ShareAccess.Protected) pin?.filter { it.isLetterOrDigit() }?.ifEmpty { null } ?: newCode() else null,
+                createdAtMs = existing?.createdAtMs ?: nowMs,
+                startsAtMs = startsAtMs,
+                expiresAtMs = expiresAtMs,
+                folderPath = folderPath,
+            )
+            saved = share
+            if (existing == null) list + share else list.map { if (it.id == existing.id) share else it }
+        }
+        return saved!!
     }
+
+    /** The share currently covering [files] / [folderPath], if any; used to show and edit its mode. */
+    fun findFor(files: List<MediaFile>, folderPath: String?): Share? = _shares.value.firstOrNull { it.matches(files, folderPath) }
 
     suspend fun revoke(id: String) = mutate { list -> list.map { if (it.id == id) it.copy(revoked = true) else it } }
 
+    /** Makes the share private again. */
     suspend fun delete(id: String) = mutate { list -> list.filterNot { it.id == id } }
 
     fun find(id: String): Share? = _shares.value.firstOrNull { it.id == id }
+
+    suspend fun setDevicePin(pin: String?) = lock.withLock {
+        // A new or removed PIN logs out every device that used the old one.
+        val d = _device.value
+        writeDevice(d.copy(pin = pin?.filter { it.isLetterOrDigit() }?.ifEmpty { null }, sessionEpoch = d.sessionEpoch + 1))
+    }
+
+    suspend fun setDeviceUntil(untilMs: Long?) = lock.withLock { writeDevice(_device.value.copy(untilMs = untilMs)) }
+
+    suspend fun logOutAllDevices() = lock.withLock { writeDevice(_device.value.copy(sessionEpoch = _device.value.sessionEpoch + 1)) }
+
+    suspend fun remember(deviceId: String, change: (RememberedAccess) -> RememberedAccess?) = lock.withLock {
+        val current = _remembered.value
+        val next = change(current[deviceId] ?: RememberedAccess())
+        val map = if (next == null || (next.deviceToken == null && next.shareTokens.isEmpty())) current - deviceId else current + (deviceId to next)
+        store.putString(KEY_REMEMBERED, json.encodeToString(map))
+        _remembered.value = map
+    }
+
+    private fun writeDevice(next: DeviceSharing) {
+        store.putString(KEY_DEVICE, json.encodeToString(next))
+        _device.value = next
+    }
 
     private suspend fun mutate(change: (List<Share>) -> List<Share>) = lock.withLock {
         val next = change(_shares.value)
@@ -71,14 +130,20 @@ class ShareStore(private val store: KeyValueStore) {
         _shares.value = next
     }
 
-    private fun load(): List<Share> =
-        store.getString(KEY_SHARES)?.let { runCatching { json.decodeFromString<List<Share>>(it) }.getOrNull() } ?: emptyList()
+    private fun Share.matches(files: List<MediaFile>, folder: String?): Boolean =
+        if (folder != null) folderPath == folder else folderPath == null && items.size == 1 && files.size == 1 && items[0].uri == files[0].uri
+
+    private inline fun <reified T> decode(key: String): T? =
+        store.getString(key)?.let { runCatching { json.decodeFromString<T>(it) }.getOrNull() }
 
     companion object {
         private const val KEY_SHARES = "shares"
         private const val KEY_DEVICE_ID = "deviceId"
         private const val KEY_HOSTING = "hosting"
         private const val KEY_SAVED = "savedAddresses"
+        private const val KEY_DEVICE = "deviceSharing"
+        private const val KEY_SECRET = "tokenSecret"
+        private const val KEY_REMEMBERED = "remembered"
 
         /** 6 digits from a cryptographically secure source. */
         @OptIn(ExperimentalUuidApi::class)

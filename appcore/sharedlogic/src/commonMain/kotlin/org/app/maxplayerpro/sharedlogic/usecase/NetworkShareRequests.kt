@@ -5,12 +5,17 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import org.app.kmediaplayer.model.MediaFile
 
-/** Files a list asked to share on the network; the main window shows the share dialog while this is set. */
-object NetworkShareRequests {
-    private val _pending = MutableStateFlow<List<MediaFile>?>(null)
-    val pending: StateFlow<List<MediaFile>?> = _pending.asStateFlow()
+/** Files (or a whole folder's files, with its [folderPath]) a screen asked to share on the network. */
+data class NetworkShareRequest(val files: List<MediaFile>, val folderPath: String? = null)
 
-    fun request(files: List<MediaFile>) { if (files.isNotEmpty()) _pending.value = files }
+/** The pending share request; the main window shows the share dialog while this is set. */
+object NetworkShareRequests {
+    private val _pending = MutableStateFlow<NetworkShareRequest?>(null)
+    val pending: StateFlow<NetworkShareRequest?> = _pending.asStateFlow()
+
+    fun request(files: List<MediaFile>, folderPath: String? = null) {
+        if (files.isNotEmpty()) _pending.value = NetworkShareRequest(files, folderPath)
+    }
 
     fun dismiss() { _pending.value = null }
 }

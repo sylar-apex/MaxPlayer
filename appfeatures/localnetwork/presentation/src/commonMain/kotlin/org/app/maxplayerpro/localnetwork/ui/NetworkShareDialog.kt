@@ -35,11 +35,11 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
+import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.plus
-import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.toLocalDateTime
 import org.app.kmediaplayer.model.MediaFile
 import org.app.kmediaplayer.platform.PlatformMedia
@@ -53,15 +53,24 @@ import org.app.maxplayerpro.localnetwork.share.SharingController
 import org.koin.compose.koinInject
 import kotlin.time.Instant
 
-/** How long a share stays open. */
-private enum class Expiry(val label: String, val hours: Int?) {
-    H1("1 hour", 1), H2("2 hours", 2), H3("3 hours", 3), Day("24 hours", 24), Custom("Custom hours", null), Range("Date range", null), Never("No expiry", null),
+/** How long something stays shared. */
+internal enum class Expiry(val label: String, val hours: Int?) {
+    H1("1 hour", 1), H2("2 hours", 2), H3("3 hours", 3), Day("24 hours", 24), Custom("Custom hours", null), Range("Date range", null), Never("No limit", null),
 }
 
-/** Asks how to share [files] on the network, creates the share, then shows its code and addresses. */
-@OptIn(ExperimentalMaterial3Api::class)
+/** Who may watch: the share's mode. Private means not shared at all. */
+internal enum class Mode(val label: String, val hint: String) {
+    Public("Public", "Anyone who can open this device"),
+    Protected("Protected", "Only with the PIN you set here"),
+    Private("Private", "Not shared"),
+}
+
+/**
+ * Asks how to share [files] (or the folder [folderPath]) on the network. Opens on the current mode when it is already
+ * shared, so the same dialog also changes or ends a share. After sharing it shows the PIN and addresses.
+ */
 @Composable
-fun NetworkShareDialog(files: List<MediaFile>, onDismiss: () -> Unit) {
+fun NetworkShareDialog(files: List<MediaFile>, folderPath: String?, onDismiss: () -> Unit) {
     val sharing = koinInject<SharingController>()
     val scope = rememberCoroutineScope()
     if (!sharing.host.supported) {
@@ -72,93 +81,82 @@ fun NetworkShareDialog(files: List<MediaFile>, onDismiss: () -> Unit) {
     var created by remember { mutableStateOf<Share?>(null) }
     created?.let { ShareCreatedDialog(it, sharing, onDismiss); return }
 
-    var title by remember { mutableStateOf(if (files.size == 1) files[0].title else files[0].folderName.ifEmpty { "${files.size} files" }) }
-    var access by remember { mutableStateOf(ShareAccess.Code) }
-    var code by remember { mutableStateOf(ShareStore.newCode()) }
-    var expiry by remember { mutableStateOf(Expiry.H2) }
-    var customHours by remember { mutableStateOf("6") }
-    var range by remember { mutableStateOf<Pair<Long, Long>?>(null) }
-    var pickingRange by remember { mutableStateOf(false) }
+    val existing = remember { sharing.store.findFor(files, folderPath) }
+    val folderName = folderPath?.substringAfterLast('/')?.ifEmpty { folderPath }
+    var title by remember { mutableStateOf(existing?.title ?: folderName ?: if (files.size == 1) files[0].title else "${files.size} files") }
+    var mode by remember { mutableStateOf(when (existing?.access) { ShareAccess.Public -> Mode.Public; ShareAccess.Protected -> Mode.Protected; null -> Mode.Public }) }
+    var pin by remember { mutableStateOf(existing?.code ?: ShareStore.newCode()) }
+    val expiry = rememberExpiryState(if (existing?.expiresAtMs == null) Expiry.Never else Expiry.Range,
+        existing?.let { s -> s.expiresAtMs?.let { (s.startsAtMs ?: s.createdAtMs) to it } })
 
     PlayerDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Share on network") },
+        title = { Text(if (existing != null) "Shared on network" else "Share on network") },
         text = {
             Column(Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState())) {
-                Text("${files.size} ${if (files.size == 1) "file" else "files"} · stream on any device on this Wi-Fi, no copying.",
+                val count = "${files.size} ${if (files.size == 1) "file" else "files"}"
+                Text(if (folderPath != null) "Folder · $count. Files added later stay private." else count,
                     fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 OutlinedTextField(title, { title = it }, Modifier.fillMaxWidth().padding(top = 10.dp), singleLine = true, label = { Text("Name") })
 
-                Label("Who can watch")
-                Choice("Only people with the code", access == ShareAccess.Code) { access = ShareAccess.Code }
-                if (access == ShareAccess.Code) {
-                    OutlinedTextField(code, { code = it.filter { c -> c.isLetterOrDigit() }.take(12) }, Modifier.fillMaxWidth().padding(start = 40.dp),
-                        singleLine = true, label = { Text("Code") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                Label("Mode")
+                Mode.entries.forEach { m ->
+                    Choice(m.label, m.hint, mode == m) { mode = m }
+                    if (m == Mode.Protected && mode == Mode.Protected) {
+                        OutlinedTextField(pin, { pin = it.filter { c -> c.isLetterOrDigit() }.take(12) }, Modifier.fillMaxWidth().padding(start = 40.dp),
+                            singleLine = true, label = { Text("PIN for this share") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+                    }
                 }
-                Choice("Anyone on this network", access == ShareAccess.Public) { access = ShareAccess.Public }
-
-                Label("Available for")
-                Expiry.entries.forEach { e ->
-                    Choice(e.label, expiry == e) { expiry = e; if (e == Expiry.Range) pickingRange = true }
-                    if (e == Expiry.Custom && expiry == Expiry.Custom) {
-                        OutlinedTextField(customHours, { customHours = it.filter(Char::isDigit).take(4) }, Modifier.fillMaxWidth().padding(start = 40.dp),
-                            singleLine = true, label = { Text("Hours") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
-                    }
-                    if (e == Expiry.Range && expiry == Expiry.Range) {
-                        Text(range?.let { (s, end) -> "${formatDate(s)} → ${formatDate(end - 1)}" } ?: "Pick dates", Modifier.padding(start = 40.dp)
-                            .clickable { pickingRange = true }.padding(vertical = 6.dp), color = MaterialTheme.colorScheme.primary)
-                    }
+                if (mode != Mode.Private) {
+                    Label("Available for")
+                    ExpiryChooser(expiry)
                 }
             }
         },
         confirmButton = {
-            val window = expiryWindow(expiry, customHours.toIntOrNull(), range)
+            val window = expiry.window()
+            val ready = mode == Mode.Private || (window != null && (mode == Mode.Public || pin.length >= 4))
             TextButton({
-                val (starts, expires) = window ?: return@TextButton
                 scope.launch {
-                    created = sharing.share(title.trim(), files, access, code, starts, expires)
+                    if (mode == Mode.Private) {
+                        existing?.let { sharing.store.delete(it.id) }
+                        onDismiss()
+                        return@launch
+                    }
+                    val (starts, expires) = window ?: return@launch
+                    val access = if (mode == Mode.Protected) ShareAccess.Protected else ShareAccess.Public
+                    created = sharing.share(title.trim(), files, folderPath, access, pin, starts, expires)
                 }
-            }, enabled = window != null && (access == ShareAccess.Public || code.length >= 4)) { Text("SHARE") }
+            }, enabled = ready) { Text(if (mode == Mode.Private) (if (existing != null) "MAKE PRIVATE" else "CLOSE") else "SHARE") }
         },
         dismissButton = { TextButton(onDismiss) { Text("CANCEL") } },
     )
-
-    if (pickingRange) {
-        val state = rememberDateRangePickerState()
-        DatePickerDialog(
-            onDismissRequest = { pickingRange = false },
-            confirmButton = {
-                TextButton({
-                    val s = state.selectedStartDateMillis
-                    val e = state.selectedEndDateMillis ?: s
-                    if (s != null && e != null) range = localDayStart(s) to localDayStart(e, plusDays = 1)
-                    pickingRange = false
-                }, enabled = state.selectedStartDateMillis != null) { Text("OK") }
-            },
-            dismissButton = { TextButton({ pickingRange = false }) { Text("CANCEL") } },
-        ) { DateRangePicker(state, Modifier.height(480.dp), title = { Text("Share open from – to", Modifier.padding(start = 24.dp, top = 16.dp)) }) }
-    }
+    ExpiryRangePicker(expiry)
 }
 
 @Composable
 private fun ShareCreatedDialog(share: Share, sharing: SharingController, onDismiss: () -> Unit) {
     val host by sharing.host.state.collectAsState()
+    val device by sharing.store.device.collectAsState()
     PlayerDialog(
         onDismissRequest = onDismiss,
         title = { Text("Shared") },
         text = {
             SelectionContainer {
                 Column {
-                    if (share.access == ShareAccess.Code) {
-                        Text("Code", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (share.access == ShareAccess.Protected) {
+                        Text("PIN for this share", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                         Text(share.code.orEmpty(), fontSize = 34.sp, fontWeight = FontWeight.Bold, letterSpacing = 4.sp)
                         Spacer(Modifier.height(10.dp))
+                    } else {
+                        Text("Public", fontWeight = FontWeight.SemiBold)
                     }
                     Text(shareStatus(share, nowMs()).label, fontSize = 13.sp)
+                    if (device.pin != null) Text("Others also need this device's PIN to see it.", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Spacer(Modifier.height(10.dp))
                     when (val h = host) {
                         is HostState.Running -> {
-                            Text("On another device open Max Player → Network share, or open in a browser:", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("On another device open Max Player → Network, or open in a browser:", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                             h.addresses.forEach { Text(it, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 4.dp)) }
                         }
                         is HostState.Failed -> Text(h.reason, color = MaterialTheme.colorScheme.error)
@@ -171,27 +169,117 @@ private fun ShareCreatedDialog(share: Share, sharing: SharingController, onDismi
     )
 }
 
+/** Sets, changes or removes the PIN others need to open this device. */
+@Composable
+internal fun DevicePinDialog(hasPin: Boolean, onDismiss: () -> Unit, onSave: (String?) -> Unit) {
+    var pin by remember { mutableStateOf("") }
+    PlayerDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (hasPin) "Change device PIN" else "Set device PIN") },
+        text = {
+            Column {
+                Text("Others enter this PIN once to open this device. Changing or removing it logs out every device.",
+                    fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                OutlinedTextField(pin, { pin = it.filter { c -> c.isLetterOrDigit() }.take(12) }, Modifier.fillMaxWidth().padding(top = 8.dp), singleLine = true,
+                    label = { Text("New PIN (4+ characters)") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword))
+            }
+        },
+        confirmButton = { TextButton({ onSave(pin) }, enabled = pin.length >= 4) { Text("SAVE") } },
+        dismissButton = {
+            Row {
+                if (hasPin) TextButton({ onSave(null) }) { Text("REMOVE PIN") }
+                TextButton(onDismiss) { Text("CANCEL") }
+            }
+        },
+    )
+}
+
+/** How long this whole device stays shared; past it sharing turns itself off. */
+@Composable
+internal fun DeviceLimitDialog(currentUntilMs: Long?, onDismiss: () -> Unit, onSave: (Long?) -> Unit) {
+    val expiry = rememberExpiryState(if (currentUntilMs == null) Expiry.Never else Expiry.Range, currentUntilMs?.let { nowMs() to it })
+    PlayerDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Share this device for") },
+        text = { Column(Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState())) { ExpiryChooser(expiry) } },
+        confirmButton = {
+            val window = expiry.window()
+            TextButton({ window?.let { onSave(it.second) } }, enabled = window != null) { Text("SAVE") }
+        },
+        dismissButton = { TextButton(onDismiss) { Text("CANCEL") } },
+    )
+    ExpiryRangePicker(expiry)
+}
+
+/** The "available for" choice and its inputs, shared by the share and device dialogs. */
+internal class ExpiryState(initial: Expiry, initialRange: Pair<Long, Long>?) {
+    var expiry by mutableStateOf(initial)
+    var customHours by mutableStateOf("6")
+    var range by mutableStateOf(initialRange)
+    var pickingRange by mutableStateOf(false)
+
+    /** (startsAt, expiresAt) for the choice, or null while it is incomplete. */
+    fun window(): Pair<Long?, Long?>? {
+        val now = nowMs()
+        return when (expiry) {
+            Expiry.Never -> null to null
+            Expiry.Custom -> customHours.toIntOrNull()?.takeIf { it > 0 }?.let { null to now + it * 3_600_000L }
+            Expiry.Range -> range?.takeIf { it.second > now }?.let { (s, e) -> (s.takeIf { it > now }) to e }
+            else -> null to now + expiry.hours!! * 3_600_000L
+        }
+    }
+}
+
+@Composable
+internal fun rememberExpiryState(initial: Expiry, initialRange: Pair<Long, Long>?) = remember { ExpiryState(initial, initialRange) }
+
+@Composable
+internal fun ExpiryChooser(state: ExpiryState) {
+    Expiry.entries.forEach { e ->
+        Choice(e.label, null, state.expiry == e) { state.expiry = e; if (e == Expiry.Range && state.range == null) state.pickingRange = true }
+        if (e == Expiry.Custom && state.expiry == Expiry.Custom) {
+            OutlinedTextField(state.customHours, { state.customHours = it.filter(Char::isDigit).take(4) }, Modifier.fillMaxWidth().padding(start = 40.dp),
+                singleLine = true, label = { Text("Hours") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number))
+        }
+        if (e == Expiry.Range && state.expiry == Expiry.Range) {
+            Text(state.range?.let { (s, end) -> "${formatDate(s)} → ${formatDate(end - 1)}" } ?: "Pick dates", Modifier.padding(start = 40.dp)
+                .clickable { state.pickingRange = true }.padding(vertical = 6.dp), color = MaterialTheme.colorScheme.primary)
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+internal fun ExpiryRangePicker(state: ExpiryState) {
+    if (!state.pickingRange) return
+    val picker = rememberDateRangePickerState()
+    DatePickerDialog(
+        onDismissRequest = { state.pickingRange = false },
+        confirmButton = {
+            TextButton({
+                val s = picker.selectedStartDateMillis
+                val e = picker.selectedEndDateMillis ?: s
+                if (s != null && e != null) state.range = localDayStart(s) to localDayStart(e, plusDays = 1)
+                state.pickingRange = false
+            }, enabled = picker.selectedStartDateMillis != null) { Text("OK") }
+        },
+        dismissButton = { TextButton({ state.pickingRange = false }) { Text("CANCEL") } },
+    ) { DateRangePicker(picker, Modifier.height(480.dp), title = { Text("Open from – to", Modifier.padding(start = 24.dp, top = 16.dp)) }) }
+}
+
 @Composable
 private fun Label(text: String) {
     Text(text, Modifier.padding(top = 14.dp, bottom = 2.dp), fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 
 @Composable
-private fun Choice(text: String, selected: Boolean, onClick: () -> Unit) {
+private fun Choice(text: String, hint: String?, selected: Boolean, onClick: () -> Unit) {
     Row(Modifier.fillMaxWidth().clickable(onClick = onClick), verticalAlignment = Alignment.CenterVertically) {
         RadioButton(selected, onClick)
-        Text(text, fontSize = 15.sp)
-    }
-}
-
-/** (startsAt, expiresAt) for the chosen option, or null while the choice is incomplete. */
-private fun expiryWindow(expiry: Expiry, customHours: Int?, range: Pair<Long, Long>?): Pair<Long?, Long?>? {
-    val now = nowMs()
-    return when (expiry) {
-        Expiry.Never -> null to null
-        Expiry.Custom -> customHours?.takeIf { it > 0 }?.let { null to now + it * 3_600_000L }
-        Expiry.Range -> range?.let { (s, e) -> (s.takeIf { it > now }) to e }
-        else -> null to now + expiry.hours!! * 3_600_000L
+        Column {
+            Text(text, fontSize = 15.sp)
+            hint?.let { Text(it, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        }
     }
 }
 
@@ -201,4 +289,4 @@ private fun localDayStart(utcMidnightMs: Long, plusDays: Int = 0): Long {
     return day.atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds()
 }
 
-private fun formatDate(ms: Long): String = PlatformMedia.formatDateLocalized(ms, "medium", null)
+internal fun formatDate(ms: Long): String = PlatformMedia.formatDateLocalized(ms, "medium", null)

@@ -12,6 +12,7 @@ import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
 import java.net.http.HttpResponse
+import kotlin.test.assertFalse
 import java.nio.channels.FileChannel
 import java.nio.file.StandardOpenOption
 import kotlin.random.Random
@@ -54,8 +55,8 @@ class KtorShareHostTest {
 
     private fun media() = MediaFile(1, "file://${file.path}", file.path, "clip one.mp4", bytes.size.toLong(), 1000, 0, mimeType = "video/mp4")
 
-    private fun get(path: String, range: String? = null): HttpResponse<ByteArray> {
-        val req = HttpRequest.newBuilder(URI(base + path)).apply { range?.let { header("Range", it) } }.GET().build()
+    private fun get(path: String, range: String? = null, deviceToken: String? = null): HttpResponse<ByteArray> {
+        val req = HttpRequest.newBuilder(URI(base + path)).apply { range?.let { header("Range", it) }; deviceToken?.let { header(DEVICE_TOKEN_HEADER, it) } }.GET().build()
         return http.send(req, HttpResponse.BodyHandlers.ofByteArray())
     }
 
@@ -67,7 +68,7 @@ class KtorShareHostTest {
 
     @Test
     fun publicShareStreamsWholeFileAndEveryRangeForm() = runBlocking {
-        store.create("Clip", listOf(media()), ShareAccess.Public, null, nowMs(), null, null)
+        store.save("Clip", listOf(media()), null, ShareAccess.Public, null, nowMs(), null, null)
         val item = shares().single().items.single()
         assertEquals("/media/${shares().single().id}/0/clip%20one.mp4", item.path)
 
@@ -93,7 +94,7 @@ class KtorShareHostTest {
 
     @Test
     fun parallelRangeRequestsDoNotInterfere() = runBlocking {
-        store.create("Clip", listOf(media()), ShareAccess.Public, null, nowMs(), null, null)
+        store.save("Clip", listOf(media()), null, ShareAccess.Public, null, nowMs(), null, null)
         val path = shares().single().items.single().path
         val starts = (0 until 24).map { it * 100_000 }
         val results = starts.map { s -> async(kotlinx.coroutines.Dispatchers.IO) { s to get(path, "bytes=$s-${s + 65_535}").body() } }.awaitAll()
@@ -102,7 +103,7 @@ class KtorShareHostTest {
 
     @Test
     fun codedShareNeedsCorrectCodeAndToken() = runBlocking {
-        val share = store.create("Secret", listOf(media()), ShareAccess.Code, "424242", nowMs(), null, null)
+        val share = store.save("Secret", listOf(media()), null, ShareAccess.Protected, "424242", nowMs(), null, null)
         val listed = shares().single()
         assertTrue(listed.locked)
         assertTrue(listed.items.isEmpty())
@@ -128,7 +129,7 @@ class KtorShareHostTest {
 
     @Test
     fun wrongCodesAreRateLimited() = runBlocking {
-        val share = store.create("Secret", listOf(media()), ShareAccess.Code, "424242", nowMs(), null, null)
+        val share = store.save("Secret", listOf(media()), null, ShareAccess.Protected, "424242", nowMs(), null, null)
         repeat(5) { assertEquals(401, post("/api/v1/shares/${share.id}/unlock", """{"code":"11111$it"}""").statusCode()) }
         // Even the right code is refused until the window passes, so guessing 10^6 codes is impractical.
         assertEquals(429, post("/api/v1/shares/${share.id}/unlock", """{"code":"424242"}""").statusCode())
@@ -137,8 +138,8 @@ class KtorShareHostTest {
     @Test
     fun expiredAndNotYetOpenSharesAreClosed() = runBlocking {
         val now = nowMs()
-        val expired = store.create("Old", listOf(media()), ShareAccess.Public, null, now - 10_000, null, now - 1)
-        val later = store.create("Later", listOf(media()), ShareAccess.Public, null, now, now + 3_600_000, null)
+        val expired = store.save("Old", listOf(media()), null, ShareAccess.Public, null, now - 10_000, null, now - 1)
+        val later = store.save("Later", listOf(media().copy(uri = "file:///later")), null, ShareAccess.Public, null, now, now + 3_600_000, null)
         assertTrue(shares().isEmpty())
         assertEquals(410, get("/media/${expired.id}/0/x.mp4").statusCode())
         assertEquals(403, get("/media/${later.id}/0/x.mp4").statusCode())
@@ -152,6 +153,68 @@ class KtorShareHostTest {
         assertEquals(HostState.Stopped, host.state.value)
         host.start(); host.start()
         assertTrue(host.state.value is HostState.Running)
+    }
+
+    @Test
+    fun devicePinGuardsEverythingAndTokensSurviveRestart() = runBlocking {
+        val share = store.save("Clip", listOf(media()), null, ShareAccess.Public, null, nowMs(), null, null)
+        store.setDevicePin("2468")
+        val info = json.decodeFromString<DeviceInfo>(String(get("/api/v1/info").body()))
+        assertTrue(info.pinRequired)
+        val locked = get("/api/v1/shares")
+        assertEquals(401, locked.statusCode())
+        assertEquals(AUTH_DEVICE, locked.headers().firstValue(AUTH_HEADER).get())
+        assertEquals(401, get("/media/${share.id}/0/x.mp4").statusCode())
+        assertEquals(401, post("/api/v1/login", """{"pin":"1111"}""").statusCode())
+
+        val token = json.decodeFromString<LoginResponse>(post("/api/v1/login", """{"pin":"2468"}""").body()).token
+        assertEquals(1, json.decodeFromString<List<RemoteShare>>(String(get("/api/v1/shares", deviceToken = token).body())).size)
+        assertEquals(206, get("/media/${share.id}/0/x.mp4?d=$token", "bytes=0-9").statusCode())
+
+        // Tokens are signed, not kept in memory: a restarted server still accepts them.
+        host.stop()
+        host = KtorShareHost(store, platform)
+        host.start()
+        base = "http://127.0.0.1:${(host.state.value as HostState.Running).port}"
+        assertEquals(200, get("/api/v1/shares", deviceToken = token).statusCode())
+
+        // "Log out all devices" voids every token handed out so far.
+        store.logOutAllDevices()
+        assertEquals(401, get("/api/v1/shares", deviceToken = token).statusCode())
+    }
+
+    @Test
+    fun shareTokensStopWorkingAfterLogOutAll() = runBlocking {
+        val share = store.save("Secret", listOf(media()), null, ShareAccess.Protected, "9090", nowMs(), null, null)
+        val unlocked = json.decodeFromString<UnlockResponse>(post("/api/v1/shares/${share.id}/unlock", """{"code":"9090"}""").body())
+        val req = { t: String -> http.send(HttpRequest.newBuilder(URI("$base/api/v1/shares/${share.id}")).header(SHARE_TOKEN_HEADER, t).GET().build(), HttpResponse.BodyHandlers.ofString()) }
+        assertEquals(200, req(unlocked.token).statusCode())
+        store.logOutAllDevices()
+        val after = req(unlocked.token)
+        assertEquals(401, after.statusCode())
+        assertEquals(AUTH_SHARE, after.headers().firstValue(AUTH_HEADER).get())
+    }
+
+    @Test
+    fun deviceTimeLimitClosesEverything() = runBlocking {
+        val share = store.save("Clip", listOf(media()), null, ShareAccess.Public, null, nowMs(), null, null)
+        store.setDeviceUntil(nowMs() - 1)
+        assertEquals(410, get("/api/v1/shares").statusCode())
+        assertEquals(410, get("/media/${share.id}/0/x.mp4").statusCode())
+        assertEquals(410, post("/api/v1/login", """{"pin":""}""").statusCode())
+    }
+
+    @Test
+    fun resharingAFolderKeepsItsIdAndOnlyItsSnapshot() = runBlocking {
+        val first = store.save("Movies", listOf(media()), "/videos", ShareAccess.Protected, "1234", nowMs(), null, null)
+        val second = store.save("Movies", listOf(media(), media().copy(uri = "file:///other", name = "b.mp4")), "/videos", ShareAccess.Public, null, nowMs(), null, null)
+        assertEquals(first.id, second.id)
+        assertEquals(1, store.shares.value.size)
+        assertEquals(2, store.findFor(emptyList(), "/videos")!!.items.size)
+        assertTrue(shares().single().folder)
+        assertFalse(shares().single().locked)
+        store.delete(first.id)
+        assertTrue(shares().isEmpty())
     }
 
     @Test

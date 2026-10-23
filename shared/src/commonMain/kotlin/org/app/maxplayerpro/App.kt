@@ -125,7 +125,7 @@ private fun NetworkShareHost() {
     val sharing = koinInject<SharingController>()
     LaunchedEffect(sharing) { sharing.resume() }
     val pending by NetworkShareRequests.pending.collectAsState()
-    pending?.let { files -> NetworkShareDialog(files, onDismiss = NetworkShareRequests::dismiss) }
+    pending?.let { req -> NetworkShareDialog(req.files, req.folderPath, onDismiss = NetworkShareRequests::dismiss) }
 }
 
 /** Shows the library's player over the app while [KMediaPlayer.videoRequested] is set. */

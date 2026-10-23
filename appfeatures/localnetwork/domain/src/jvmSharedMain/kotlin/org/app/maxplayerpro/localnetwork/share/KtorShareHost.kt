@@ -8,6 +8,7 @@ import io.ktor.http.content.OutgoingContent
 import io.ktor.http.encodeURLPathPart
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
+import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.install
 import io.ktor.server.cio.CIO
 import io.ktor.server.engine.EmbeddedServer
@@ -17,6 +18,7 @@ import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
 import io.ktor.server.plugins.cors.routing.CORS
 import io.ktor.server.plugins.origin
 import io.ktor.server.plugins.partialcontent.PartialContent
+import io.ktor.server.request.header
 import io.ktor.server.request.receive
 import io.ktor.server.response.header
 import io.ktor.server.response.respond
@@ -47,7 +49,11 @@ import java.util.concurrent.ConcurrentHashMap
 /**
  * Serves [ShareStore]'s shares over HTTP with Ktor. Seeking uses Ktor's PartialContent plugin, which handles every
  * Range form (`a-b`, `a-`, `-n`, multiple ranges, If-Range). Start/stop run one at a time under [lifecycle], and
- * request handlers only read immutable snapshots, so a share revoked mid-stream stops at the next request.
+ * request handlers only read immutable snapshots, so a share made private mid-stream stops at the next request.
+ *
+ * Access has two layers: an optional device PIN (exchanged for a device token at `login`) guards everything, and a
+ * protected share additionally needs its own PIN (exchanged for a share token at `unlock`). Tokens are signed, not
+ * stored (see [AccessTokens]).
  */
 class KtorShareHost(private val store: ShareStore, private val platform: HostPlatform) : ShareHost {
     override val supported = true
@@ -57,10 +63,9 @@ class KtorShareHost(private val store: ShareStore, private val platform: HostPla
     private val lifecycle = Mutex()
     private var server: EmbeddedServer<*, *>? = null
     private var ioScope: CoroutineScope? = null
-    private val tokens = ConcurrentHashMap<String, Grant>()
+    private val tokens = AccessTokens(store.tokenSecret)
     private val failures = ConcurrentHashMap<String, Failures>()
 
-    private data class Grant(val shareId: String, val expiresAtMs: Long)
     private data class Failures(val count: Int, val windowStartMs: Long)
 
     override suspend fun start() { lifecycle.withLock {
@@ -88,7 +93,6 @@ class KtorShareHost(private val store: ShareStore, private val platform: HostPla
         withContext(Dispatchers.IO) { srv.stop(gracePeriodMillis = 300, timeoutMillis = 2_000) }
         ioScope?.cancel()
         ioScope = null
-        tokens.clear()
         platform.onHostingChanged(false)
         _state.value = HostState.Stopped
     } }
@@ -111,79 +115,132 @@ class KtorShareHost(private val store: ShareStore, private val platform: HostPla
             allowMethod(HttpMethod.Post)
             allowHeader(HttpHeaders.ContentType)
             allowHeader(HttpHeaders.Range)
+            allowHeader(DEVICE_TOKEN_HEADER)
+            allowHeader(SHARE_TOKEN_HEADER)
             exposeHeader(HttpHeaders.ContentRange)
             exposeHeader(HttpHeaders.AcceptRanges)
+            exposeHeader(AUTH_HEADER)
         }
         routing {
             get("/") { call.respondText(WEB_PAGE, ContentType.Text.Html) }
             get("/api/v1/info") {
-                call.respond(DeviceInfo(store.deviceId, platform.deviceName, platform.platform, call.request.local.localPort))
+                call.respond(DeviceInfo(store.deviceId, platform.deviceName, platform.platform, call.request.local.localPort, pinRequired = store.device.value.pin != null))
+            }
+            post("/api/v1/login") {
+                val now = nowMs()
+                if (!deviceOpen(now)) return@post call.respond(HttpStatusCode.Gone)
+                if (limited(call, now)) return@post call.respond(HttpStatusCode.TooManyRequests)
+                val device = store.device.value
+                val pin = runCatching { call.receive<LoginRequest>().pin }.getOrDefault("")
+                if (device.pin != null && !samePin(device.pin, pin)) {
+                    failed(call, now)
+                    return@post call.respond(HttpStatusCode.Unauthorized)
+                }
+                failures.remove(call.request.origin.remoteHost)
+                call.respond(LoginResponse(tokens.issue(AccessTokens.DEVICE, device.sessionEpoch, device.untilMs ?: Long.MAX_VALUE)))
             }
             get("/api/v1/shares") {
                 val now = nowMs()
-                call.respond(store.shares.value.filter { it.isOpen(now) }.map { it.toRemote(withItems = it.access == ShareAccess.Public) })
+                if (!admitDevice(call, call.request.header(DEVICE_TOKEN_HEADER), now)) return@get
+                val shareToken = call.request.header(SHARE_TOKEN_HEADER)
+                call.respond(store.shares.value.filter { it.isOpen(now) }.map { it.toRemote(withItems = canOpen(it, shareToken, now)) })
+            }
+            get("/api/v1/shares/{id}") {
+                val now = nowMs()
+                if (!admitDevice(call, call.request.header(DEVICE_TOKEN_HEADER), now)) return@get
+                val share = store.find(call.parameters["id"].orEmpty())
+                if (!admitShare(call, share, call.request.header(SHARE_TOKEN_HEADER), now)) return@get
+                call.respond(share!!.toRemote(withItems = true))
             }
             post("/api/v1/shares/{id}/unlock") {
-                val client = call.request.origin.remoteHost
                 val now = nowMs()
-                val f = failures[client]?.takeIf { now - it.windowStartMs < FAILURE_WINDOW_MS }
-                if (f != null && f.count >= MAX_FAILURES) return@post call.respond(HttpStatusCode.TooManyRequests)
+                if (!admitDevice(call, call.request.header(DEVICE_TOKEN_HEADER), now)) return@post
+                if (limited(call, now)) return@post call.respond(HttpStatusCode.TooManyRequests)
                 val share = store.find(call.parameters["id"].orEmpty())
                 when {
                     share == null || share.revoked -> call.respond(HttpStatusCode.NotFound)
                     share.isExpired(now) -> call.respond(HttpStatusCode.Gone)
                     !share.isOpen(now) -> call.respond(HttpStatusCode.Forbidden)
                     share.access == ShareAccess.Public -> call.respond(UnlockResponse("", share.expiresAtMs ?: Long.MAX_VALUE, share.toRemote(true)))
-                    !sameCode(share.code, runCatching { call.receive<UnlockRequest>().code }.getOrDefault("")) -> {
-                        failures.compute(client) { _, old ->
-                            if (old == null || now - old.windowStartMs >= FAILURE_WINDOW_MS) Failures(1, now) else old.copy(count = old.count + 1)
-                        }
+                    !samePin(share.code, runCatching { call.receive<UnlockRequest>().code }.getOrDefault("")) -> {
+                        failed(call, now)
                         call.respond(HttpStatusCode.Unauthorized)
                     }
                     else -> {
-                        failures.remove(client)
-                        tokens.entries.removeIf { it.value.expiresAtMs <= now }
-                        val expires = minOf(share.expiresAtMs ?: Long.MAX_VALUE, now + TOKEN_LIFETIME_MS)
-                        val token = ShareStore.newId()
-                        tokens[token] = Grant(share.id, expires)
-                        call.respond(UnlockResponse(token, expires, share.toRemote(true)))
+                        failures.remove(call.request.origin.remoteHost)
+                        val expires = share.expiresAtMs ?: Long.MAX_VALUE
+                        call.respond(UnlockResponse(tokens.issue(AccessTokens.share(share.id), store.device.value.sessionEpoch, expires), expires, share.toRemote(true)))
                     }
                 }
             }
             get("/media/{share}/{item}/{name}") {
                 val now = nowMs()
+                if (!admitDevice(call, call.request.queryParameters["d"], now)) return@get
                 val share = store.find(call.parameters["share"].orEmpty())
-                val item = share?.items?.firstOrNull { it.id == call.parameters["item"] }
-                val grant = call.request.queryParameters["t"]?.let { tokens[it] }
-                when {
-                    share == null || item == null || share.revoked -> call.respond(HttpStatusCode.NotFound)
-                    share.isExpired(now) -> call.respond(HttpStatusCode.Gone)
-                    !share.isOpen(now) -> call.respond(HttpStatusCode.Forbidden)
-                    share.access == ShareAccess.Code && (grant == null || grant.shareId != share.id || grant.expiresAtMs <= now) ->
-                        call.respond(HttpStatusCode.Unauthorized)
-                    else -> {
-                        val size = platform.open(item)?.use { it.size() } ?: return@get call.respond(HttpStatusCode.NotFound)
-                        call.response.header(HttpHeaders.CacheControl, "no-store")
-                        call.respond(ChannelContent(scope, { platform.open(item) }, size, ContentType.parse(item.mimeType.ifEmpty { "application/octet-stream" })))
-                    }
-                }
+                if (!admitShare(call, share, call.request.queryParameters["t"], now)) return@get
+                val item = share!!.items.firstOrNull { it.id == call.parameters["item"] } ?: return@get call.respond(HttpStatusCode.NotFound)
+                val size = platform.open(item)?.use { it.size() } ?: return@get call.respond(HttpStatusCode.NotFound)
+                call.response.header(HttpHeaders.CacheControl, "no-store")
+                call.respond(ChannelContent(scope, { platform.open(item) }, size, ContentType.parse(item.mimeType.ifEmpty { "application/octet-stream" })))
             }
         }
     }
 
+    /** Device-level time limit: past it, nothing on this device opens. */
+    private fun deviceOpen(nowMs: Long): Boolean = store.device.value.untilMs?.let { nowMs < it } ?: true
+
+    /** Responds and returns false unless the device is open and, when it has a PIN, [token] is a current device token. */
+    private suspend fun admitDevice(call: ApplicationCall, token: String?, nowMs: Long): Boolean {
+        val device = store.device.value
+        return when {
+            !deviceOpen(nowMs) -> { call.respond(HttpStatusCode.Gone); false }
+            device.pin != null && !tokens.valid(token, AccessTokens.DEVICE, device.sessionEpoch, nowMs) -> {
+                call.response.header(AUTH_HEADER, AUTH_DEVICE)
+                call.respond(HttpStatusCode.Unauthorized)
+                false
+            }
+            else -> true
+        }
+    }
+
+    /** Responds and returns false unless [share] is open and, when protected, [token] unlocks it. */
+    private suspend fun admitShare(call: ApplicationCall, share: Share?, token: String?, nowMs: Long): Boolean {
+        when {
+            share == null || share.revoked -> call.respond(HttpStatusCode.NotFound)
+            share.isExpired(nowMs) -> call.respond(HttpStatusCode.Gone)
+            !share.isOpen(nowMs) -> call.respond(HttpStatusCode.Forbidden)
+            !canOpen(share, token, nowMs) -> { call.response.header(AUTH_HEADER, AUTH_SHARE); call.respond(HttpStatusCode.Unauthorized) }
+            else -> return true
+        }
+        return false
+    }
+
+    private fun canOpen(share: Share, token: String?, nowMs: Long): Boolean =
+        share.access == ShareAccess.Public || tokens.valid(token, AccessTokens.share(share.id), store.device.value.sessionEpoch, nowMs)
+
+    private fun limited(call: ApplicationCall, nowMs: Long): Boolean {
+        val f = failures[call.request.origin.remoteHost]?.takeIf { nowMs - it.windowStartMs < FAILURE_WINDOW_MS }
+        return f != null && f.count >= MAX_FAILURES
+    }
+
+    private fun failed(call: ApplicationCall, nowMs: Long) {
+        failures.compute(call.request.origin.remoteHost) { _, old ->
+            if (old == null || nowMs - old.windowStartMs >= FAILURE_WINDOW_MS) Failures(1, nowMs) else old.copy(count = old.count + 1)
+        }
+    }
+
     private fun Share.toRemote(withItems: Boolean) = RemoteShare(
-        id = id, title = title, locked = access == ShareAccess.Code, itemCount = items.size, expiresAtMs = expiresAtMs,
+        id = id, title = title, locked = access == ShareAccess.Protected, itemCount = items.size, expiresAtMs = expiresAtMs, folder = isFolder,
         items = if (withItems) items.map { RemoteItem(it.id, it.name, it.sizeBytes, it.durationMs, it.mimeType, it.isAudio, "/media/$id/${it.id}/${it.name.encodeURLPathPart()}", it.width, it.height) } else emptyList(),
     )
 
     /** Compares in constant time so response timing does not reveal how many leading digits were right. */
-    private fun sameCode(expected: String?, given: String): Boolean =
+    private fun samePin(expected: String?, given: String): Boolean =
         expected != null && MessageDigest.isEqual(expected.toByteArray(), given.trim().toByteArray())
 
     private companion object {
         const val MAX_FAILURES = 5
         const val FAILURE_WINDOW_MS = 60_000L
-        const val TOKEN_LIFETIME_MS = 12 * 3_600_000L
     }
 }
 
