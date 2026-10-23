@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
@@ -59,8 +60,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.backhandler.BackHandler
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -71,6 +74,7 @@ import org.app.kmediaplayer.model.MediaFile
 import org.app.kmediaplayer.ui.common.PlayerDialog
 import org.app.kmediaplayer.util.formatDuration
 import org.app.kmediaplayer.util.formatSize
+import org.app.maxplayerpro.appcore.component.FolderGlyph
 import org.app.maxplayerpro.appcore.component.TopBar
 import org.app.maxplayerpro.localnetwork.share.HostState
 import org.app.maxplayerpro.localnetwork.share.RemoteShare
@@ -268,12 +272,8 @@ private fun DeviceContent(open: LocalNetworkContract.OpenDevice, onEvent: (Event
     BackHandler { onEvent(if (folder != null) Event.CloseShare else Event.CloseDevice) }
     var menu by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton({ onEvent(if (folder != null) Event.CloseShare else Event.CloseDevice) }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") }
-            Column(Modifier.weight(1f)) {
-                Text(folder?.title ?: open.name, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(if (folder != null) open.name else open.baseUrl.substringAfter("://"), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
+        // TopBar keeps clear of the status bar, like every other screen.
+        TopBar(folder?.title ?: open.name, onBack = { onEvent(if (folder != null) Event.CloseShare else Event.CloseDevice) }) {
             IconButton({ onEvent(Event.Refresh) }) { Icon(Icons.Default.Refresh, "Refresh") }
             Box {
                 IconButton({ menu = true }) { Icon(Icons.Default.MoreVert, "More") }
@@ -282,11 +282,10 @@ private fun DeviceContent(open: LocalNetworkContract.OpenDevice, onEvent: (Event
                 }
             }
         }
-        HorizontalDivider()
         when {
             folder != null -> LazyColumn(Modifier.fillMaxSize()) {
                 itemsIndexed(folder.items, key = { _, it -> it.id }) { i, item ->
-                    FileRow(item.name, item.isAudio, listOfNotNull(item.durationMs.takeIf { it > 0 }?.let(::formatDuration), formatSize(item.sizeBytes)).joinToString(" · "), locked = false) {
+                    FileRow(item.name, item.isAudio, item.durationMs, item.sizeBytes, locked = false) {
                         onEvent(Event.Play(folder, i))
                     }
                 }
@@ -312,42 +311,53 @@ private fun DeviceContent(open: LocalNetworkContract.OpenDevice, onEvent: (Event
     }
 }
 
+/** A shared folder or file, drawn like the library's own rows; a lock at the end marks a protected one not yet opened. */
 @Composable
 private fun ShareRow(share: RemoteShare, open: LocalNetworkContract.OpenDevice, onEvent: (Event) -> Unit) {
     val ready = open.openable(share)
     val locked = ready == null
     if (share.folder || share.itemCount > 1) {
-        Row(Modifier.fillMaxWidth().clickable { onEvent(Event.OpenShare(share)) }.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(width = 62.dp, height = 46.dp).background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp)), contentAlignment = Alignment.Center) {
-                Icon(if (locked) Icons.Default.Lock else Icons.Default.Folder, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
+        Row(Modifier.fillMaxWidth().height(62.dp).clickable { onEvent(Event.OpenShare(share)) }.padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+            FolderGlyph(Modifier.size(width = 62.dp, height = 46.dp))
             Spacer(Modifier.width(16.dp))
             Column(Modifier.weight(1f)) {
-                Text(share.title, fontSize = 15.sp, color = MaterialTheme.colorScheme.primary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text("${share.itemCount} ${if (share.itemCount == 1) "file" else "files"}" + if (locked) " · Protected" else "", fontSize = 12.sp,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(share.title.replaceFirstChar { it.uppercaseChar() }, fontSize = 15.sp, lineHeight = 18.sp, color = MaterialTheme.colorScheme.primary,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Spacer(Modifier.height(2.dp))
+                Text(countLabel(share.itemCount, ready?.items?.all { it.isAudio } == true), fontSize = 12.sp, lineHeight = 15.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
+            if (locked) LockMark()
         }
     } else {
         val item = ready?.items?.firstOrNull()
-        val meta = item?.let { listOfNotNull(it.durationMs.takeIf { d -> d > 0 }?.let(::formatDuration), formatSize(it.sizeBytes)).joinToString(" · ") } ?: "Protected"
-        FileRow(item?.name ?: share.title, item?.isAudio == true, meta, locked) { onEvent(Event.OpenShare(share)) }
+        FileRow(item?.name ?: share.title, item?.isAudio == true, item?.durationMs ?: 0, item?.sizeBytes, locked) { onEvent(Event.OpenShare(share)) }
     }
 }
 
 @Composable
-private fun FileRow(name: String, isAudio: Boolean, meta: String, locked: Boolean, onClick: () -> Unit) {
-    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(width = 62.dp, height = 46.dp).background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(8.dp)), contentAlignment = Alignment.Center) {
-            Icon(if (locked) Icons.Default.Lock else if (isAudio) Icons.Default.MusicNote else Icons.Default.Movie, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+private fun FileRow(name: String, isAudio: Boolean, durationMs: Long, sizeBytes: Long?, locked: Boolean, onClick: () -> Unit) {
+    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(width = 120.dp, height = 68.dp).background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(6.dp)), contentAlignment = Alignment.Center) {
+            Icon(if (isAudio) Icons.Default.MusicNote else Icons.Default.Movie, null, Modifier.size(28.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (durationMs > 0) Text(formatDuration(durationMs), Modifier.align(Alignment.BottomEnd).padding(4.dp)
+                .background(Color.Black.copy(alpha = 0.7f), RoundedCornerShape(3.dp)).padding(horizontal = 4.dp, vertical = 1.dp),
+                color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Medium)
         }
-        Spacer(Modifier.width(16.dp))
+        Spacer(Modifier.width(14.dp))
         Column(Modifier.weight(1f)) {
-            Text(name, fontSize = 15.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Text(meta, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(name.substringBeforeLast('.').ifEmpty { name }, fontSize = 15.sp, lineHeight = 19.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            sizeBytes?.let { Text(formatSize(it), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
+        if (locked) LockMark()
     }
 }
+
+@Composable
+private fun LockMark() {
+    Icon(Icons.Default.Lock, "Protected", Modifier.padding(start = 8.dp).size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+}
+
+private fun countLabel(n: Int, audio: Boolean): String = if (audio) "$n ${if (n == 1) "song" else "songs"}" else "$n ${if (n == 1) "video" else "videos"}"
 
 // ---- Dialogs and small pieces ----
 
@@ -362,7 +372,10 @@ private fun PinDialog(prompt: LocalNetworkContract.PinPrompt, deviceName: String
                 Text(prompt.share?.let { "Enter the PIN for \"${it.title}\"." } ?: "This device has a PIN. Enter it once; it's remembered until the owner logs everyone out.",
                     fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 OutlinedTextField(pin, { pin = it.filter { c -> c.isLetterOrDigit() }.take(12) }, Modifier.fillMaxWidth().padding(top = 8.dp), singleLine = true,
-                    label = { Text("PIN") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword), isError = prompt.error != null)
+                    label = { Text("PIN") }, isError = prompt.error != null,
+                    // Enter on the keyboard submits, so the button hidden behind the keyboard isn't needed.
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword, imeAction = ImeAction.Go),
+                    keyboardActions = KeyboardActions(onGo = { if (pin.isNotEmpty() && !prompt.busy) onEvent(Event.SubmitPin(pin)) }))
                 prompt.error?.let { Text(it, Modifier.padding(top = 6.dp), color = MaterialTheme.colorScheme.error, fontSize = 13.sp) }
             }
         },

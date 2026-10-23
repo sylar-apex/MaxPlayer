@@ -5,7 +5,6 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -33,7 +32,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -53,6 +51,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import org.app.maxplayerpro.sharedlogic.usecase.NetworkShareRequests
 import org.app.kmediaplayer.util.formatSize
+import org.app.maxplayerpro.appcore.component.FolderGlyph
 import org.app.maxplayerpro.appcore.theme.MaxColors
 import org.app.maxplayerpro.appres.resources.Res
 import org.app.maxplayerpro.appres.resources.ic_chip_music
@@ -106,31 +105,6 @@ private fun FolderActionsSheet(folder: MediaFolder, onDismiss: () -> Unit) {
             }
         }
         Spacer(Modifier.navigationBarsPadding().height(12.dp))
-    }
-}
-
-@Composable
-private fun FolderGlyph(modifier: Modifier) {
-    Canvas(modifier) {
-        val w = size.width; val h = size.height
-        val r = h * 0.09f
-        val tabTop = w * 0.33f
-        val tabEnd = w * 0.49f
-        val bodyY = h * 0.145f
-        val path = Path().apply {
-            moveTo(0f, r)
-            quadraticTo(0f, 0f, r, 0f)
-            lineTo(tabTop, 0f)
-            cubicTo(tabTop + (tabEnd - tabTop) * 0.45f, 0f, tabTop + (tabEnd - tabTop) * 0.55f, bodyY, tabEnd, bodyY)
-            lineTo(w - r, bodyY)
-            quadraticTo(w, bodyY, w, bodyY + r)
-            lineTo(w, h - r)
-            quadraticTo(w, h, w - r, h)
-            lineTo(r, h)
-            quadraticTo(0f, h, 0f, h - r)
-            close()
-        }
-        drawPath(path, MaxColors.folderGlyph)
     }
 }
 
