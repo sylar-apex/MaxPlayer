@@ -12,6 +12,7 @@ import org.app.maxplayerpro.help.ui.HelpScreen
 import org.app.maxplayerpro.home.ui.HomeNavigation
 import org.app.maxplayerpro.home.ui.HomeScreen
 import org.app.maxplayerpro.localnetwork.ui.LocalNetworkScreen
+import org.app.maxplayerpro.localnetwork.ui.SharingToggle
 import org.app.maxplayerpro.mediamanager.domain.model.MediaListKind
 import org.app.maxplayerpro.mediamanager.ui.MediaListScreen
 import org.app.maxplayerpro.mediamanager.ui.MediaManagerScreen
@@ -43,6 +44,7 @@ fun NavGraphBuilder.appNavGraph(navController: NavController) {
                 onFileTransfer = { navController.push(Routes.Unavailable("File Transfer", FILE_TRANSFER_REASON)) },
                 onPlaylists = { navController.push(Routes.Playlists) },
                 onNetwork = { navController.push(Routes.LocalNetwork) },
+                sharingToggle = { SharingToggle() },
             ),
         )
     }

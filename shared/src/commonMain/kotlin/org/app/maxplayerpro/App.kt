@@ -57,6 +57,7 @@ import org.app.maxplayerpro.sharedlogic.platform.AppScreenRequests
 import org.app.maxplayerpro.sharedlogic.usecase.NetworkShareRequests
 import org.app.maxplayerpro.localnetwork.share.SharingController
 import org.app.maxplayerpro.localnetwork.ui.NetworkShareDialog
+import org.app.maxplayerpro.localnetwork.ui.SharingToggle
 
 private fun NavController.open(screen: AppScreen) = when (screen) {
     AppScreen.Settings -> push(Routes.Settings)
@@ -95,6 +96,7 @@ fun App(startScreen: AppScreen? = null, embeddedPlayer: Boolean = false) {
                         titleBar, refreshing, onRefresh = { scope.launch { media.refresh() } },
                         onBack = history::back.takeIf { canBack }, onForward = history::forward.takeIf { history.canGoForward },
                         onSearchTyped = { if (navController.currentDestination?.hasRoute<Routes.Search>() != true) navController.push(Routes.Search) },
+                        trailing = { SharingToggle() },
                     )
                 }
             }
@@ -125,7 +127,7 @@ private fun NetworkShareHost() {
     val sharing = koinInject<SharingController>()
     LaunchedEffect(sharing) { sharing.resume() }
     val pending by NetworkShareRequests.pending.collectAsState()
-    pending?.let { req -> NetworkShareDialog(req.files, req.folderPath, onDismiss = NetworkShareRequests::dismiss) }
+    pending?.let { req -> NetworkShareDialog(req.targets, onDismiss = NetworkShareRequests::dismiss) }
 }
 
 /** Shows the library's player over the app while [KMediaPlayer.videoRequested] is set. */

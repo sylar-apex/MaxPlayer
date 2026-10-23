@@ -13,6 +13,8 @@ class HomeContract {
         data object PlayLast : Event()
         /** Rescans the library (drives, media index or remembered browser folders). */
         data object Refresh : Event()
+        /** Deletes every video in the picked folders (with the platform's consent prompt where needed). */
+        data class DeleteFolders(val folders: List<MediaFolder>) : Event()
     }
 
     data class State(

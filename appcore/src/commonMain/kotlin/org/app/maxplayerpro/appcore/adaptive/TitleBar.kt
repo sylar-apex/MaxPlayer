@@ -120,6 +120,8 @@ fun TitleBar(
     onForward: (() -> Unit)?,
     /** Typing in the search box: the shell opens the search page if it is not showing. */
     onSearchTyped: () -> Unit,
+    /** App-wide controls after the page's actions, on every page (network sharing). */
+    trailing: @Composable RowScope.() -> Unit = {},
 ) {
     val page = host.page
     val colors = MaterialTheme.colorScheme
@@ -135,7 +137,10 @@ fun TitleBar(
                 SearchField(Modifier.padding(horizontal = 8.dp).weight(1f), host, onSearchTyped)
                 BarButton(Icons.Filled.Refresh, "Refresh", onRefresh.takeUnless { refreshing })
             }
-            if (page != null) Row(Modifier.align(Alignment.CenterEnd), horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically, content = page.actions)
+            Row(Modifier.align(Alignment.CenterEnd), horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
+                page?.actions?.invoke(this)
+                trailing()
+            }
         }
         // Divider; while refreshing a faint track with a soft progress line running along it (never bright on dark themes).
         if (refreshing) LinearProgressIndicator(Modifier.fillMaxWidth().height(2.dp), color = colors.onSurface.copy(alpha = 0.28f), trackColor = colors.onSurface.copy(alpha = 0.08f), strokeCap = StrokeCap.Butt, gapSize = 0.dp)

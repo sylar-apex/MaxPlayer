@@ -89,13 +89,16 @@ internal fun HomeWide(
             header(32.dp)
             LibrarySourcesBar(folderImport, Modifier.padding(top = 12.dp), inset = 32.dp)
             Box(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                FolderList(state.folders, opts, showPath = opts.viewMode == ViewMode.AllFolders, newFolders = state.newFolders) { navigation.onFolder(it.path) }
+                FolderList(state.folders, opts, showPath = opts.viewMode == ViewMode.AllFolders, newFolders = state.newFolders,
+                    onDelete = { onEvent(HomeContract.Event.DeleteFolders(it)) }) { navigation.onFolder(it.path) }
             }
         }
         return
     }
+    val picker = rememberFolderPicker()
+    Column(Modifier.fillMaxSize()) {
     LazyVerticalGrid(
-        GridCells.Adaptive(CardGrid.minCardWidth), Modifier.fillMaxSize(),
+        GridCells.Adaptive(CardGrid.minCardWidth), Modifier.fillMaxWidth().weight(1f),
         contentPadding = CardGrid.contentPadding,
         horizontalArrangement = Arrangement.spacedBy(CardGrid.gap),
         verticalArrangement = Arrangement.spacedBy(CardGrid.gap),
@@ -108,7 +111,14 @@ internal fun HomeWide(
         }
         item(span = { GridItemSpan(maxLineSpan) }) { SectionTitle("Folders", trailing = "${state.folders.size}", inset = 0.dp) }
         items(state.folders, key = { it.path }) { folder ->
-            FolderCard(folder, onClick = { navigation.onFolder(folder.path) }, showPath = opts.viewMode == ViewMode.AllFolders, showThumbnail = opts.folderThumbnails, hasNew = folder.path in state.newFolders)
+            FolderCard(
+                folder, onClick = { picker.tap(folder) { navigation.onFolder(it.path) } }, showPath = opts.viewMode == ViewMode.AllFolders,
+                showThumbnail = opts.folderThumbnails, hasNew = folder.path in state.newFolders,
+                onLongClick = { picker.toggle(folder) }, onMore = { picker.menuFor = folder },
+                selected = if (picker.selecting) folder.path in picker.selected else null,
+            )
         }
+    }
+    FolderPickerUi(picker, state.folders, onDelete = { onEvent(HomeContract.Event.DeleteFolders(it)) })
     }
 }

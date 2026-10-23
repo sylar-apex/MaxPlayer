@@ -63,6 +63,8 @@ class HomeNavigation(
     val onFileTransfer: () -> Unit,
     val onPlaylists: () -> Unit,
     val onNetwork: () -> Unit,
+    /** The network-sharing switch for the header; drawn by the app shell, which knows about sharing. */
+    val sharingToggle: @Composable () -> Unit = {},
 )
 
 @Composable
@@ -87,6 +89,7 @@ fun HomeContent(state: HomeContract.State, navigation: HomeNavigation, onEvent: 
             TopBar(if (opts.viewMode == ViewMode.Files) "Videos" else "Folders") {
                 IconButton({ onEvent(HomeContract.Event.Refresh) }) { Icon(Icons.Outlined.Refresh, "Refresh") }
                 if (folderImport.available) IconButton(folderImport::pickFolder) { Icon(Icons.Outlined.CreateNewFolder, "Open folder") }
+                navigation.sharingToggle()
                 IconButton(navigation.onSearch) { Icon(painterResource(Res.drawable.ic_search), "Search") }
                 IconButton({ showMenu = true }) { Icon(painterResource(Res.drawable.ic_view_menu), "View Menu") }
                 IconButton(navigation.onMe) { Icon(painterResource(Res.drawable.ic_account), "Account") }
@@ -99,7 +102,8 @@ fun HomeContent(state: HomeContract.State, navigation: HomeNavigation, onEvent: 
                     ViewMode.Files -> FileList(state.files, opts, emptyTitle = "No videos found.")
                     ViewMode.Folders, ViewMode.AllFolders -> {
                         if (state.folders.isEmpty()) LibraryEmptyState(state.loading, folderImport)
-                        else FolderList(state.folders, opts, showPath = opts.viewMode == ViewMode.AllFolders, newFolders = state.newFolders) { f: MediaFolder -> navigation.onFolder(f.path) }
+                        else FolderList(state.folders, opts, showPath = opts.viewMode == ViewMode.AllFolders, newFolders = state.newFolders,
+                            onDelete = { onEvent(HomeContract.Event.DeleteFolders(it)) }) { f: MediaFolder -> navigation.onFolder(f.path) }
                     }
                 }
             }

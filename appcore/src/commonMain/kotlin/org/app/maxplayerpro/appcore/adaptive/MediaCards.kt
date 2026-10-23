@@ -1,5 +1,9 @@
 package org.app.maxplayerpro.appcore.adaptive
 
+import androidx.compose.material.icons.outlined.Circle
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -158,14 +162,28 @@ fun VideoCard(
 }
 
 /** A folder in a wide grid: the first video's artwork with the folder's name and contents. */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun FolderCard(folder: MediaFolder, onClick: () -> Unit, modifier: Modifier = Modifier, showPath: Boolean = false, showThumbnail: Boolean = true, hasNew: Boolean = false) {
+fun FolderCard(
+    folder: MediaFolder, onClick: () -> Unit, modifier: Modifier = Modifier, showPath: Boolean = false, showThumbnail: Boolean = true, hasNew: Boolean = false,
+    /** Long-press starts picking several folders. */
+    onLongClick: (() -> Unit)? = null,
+    /** The ⋮ beside the name: this folder's actions. */
+    onMore: (() -> Unit)? = null,
+    /** Null when not picking; otherwise whether this folder is picked. */
+    selected: Boolean? = null,
+) {
     val (source, hovered) = rememberHover()
     val cover = remember(folder.path, showThumbnail) { if (showThumbnail) folder.files.firstOrNull { !it.isAudio } else null }
-    Column(modifier.hoverable(source).clickable(interactionSource = source, indication = null, onClick = onClick)) {
+    Column(modifier.hoverable(source).combinedClickable(interactionSource = source, indication = null, onClick = onClick, onLongClick = onLongClick)) {
         Box {
             Artwork(cover, hovered, Modifier.fillMaxWidth(), fallbackFolder = cover == null)
             Box(Modifier.matchParentSize().clip(cardShape).background(Brush.verticalGradient(0.45f to Color.Transparent, 1f to Color(0xD9000000))))
+            if (selected == true) Box(Modifier.matchParentSize().clip(cardShape).border(3.dp, MaterialTheme.colorScheme.primary, cardShape).background(MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)))
+            if (selected != null) Icon(
+                if (selected) Icons.Default.CheckCircle else Icons.Outlined.Circle, if (selected) "Picked" else "Not picked",
+                Modifier.align(Alignment.TopStart).padding(8.dp).size(24.dp), tint = if (selected) MaterialTheme.colorScheme.primary else Color.White,
+            )
             // The folder holds videos not played yet that are still tagged "NEW".
             if (hasNew) Box(Modifier.align(Alignment.TopEnd).padding(8.dp)) { CornerTag("NEW") }
             Row(Modifier.align(Alignment.BottomStart).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -174,10 +192,13 @@ fun FolderCard(folder: MediaFolder, onClick: () -> Unit, modifier: Modifier = Mo
                 Text("${folder.files.size} ${if (folder.files.size == 1) "video" else "videos"}", color = Color(0xE6FFFFFF), fontSize = 12.sp, fontWeight = FontWeight.Medium)
             }
         }
-        Text(
-            folder.name, Modifier.padding(top = 10.dp), maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
-            color = if (hovered) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground,
-        )
+        Row(Modifier.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                folder.name, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
+                color = if (hovered) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground,
+            )
+            if (onMore != null && selected == null) IconButton(onMore, Modifier.size(28.dp)) { Icon(Icons.Outlined.MoreVert, "Folder actions", Modifier.size(18.dp)) }
+        }
         Text(
             if (showPath) folder.path else formatSize(folder.sizeBytes), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1, overflow = TextOverflow.Ellipsis,

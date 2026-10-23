@@ -1,5 +1,14 @@
 package org.app.maxplayerpro.home.ui.component
 
+import org.app.maxplayerpro.sharedlogic.usecase.ShareTarget
+import org.app.kmediaplayer.ui.common.PlayerDialog
+import androidx.compose.material3.TextButton
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material.icons.outlined.Circle
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DoneAll
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.graphics.Color
@@ -126,45 +135,129 @@ private fun FolderIcon(modifier: Modifier, isNew: Boolean) {
     }
 }
 
+/**
+ * Folders picked for a bulk action. Long-press starts picking; while [selecting], taps add or remove folders instead of
+ * opening them. [menuFor] is the folder whose ⋮ sheet is open.
+ */
+internal class FolderPicker {
+    var selected by mutableStateOf(emptySet<String>())
+    var menuFor by mutableStateOf<MediaFolder?>(null)
+    val selecting: Boolean get() = selected.isNotEmpty()
+
+    fun toggle(f: MediaFolder) { selected = if (f.path in selected) selected - f.path else selected + f.path }
+    fun clear() { selected = emptySet() }
+
+    /** A tap: picks while picking, otherwise opens. */
+    fun tap(f: MediaFolder, open: (MediaFolder) -> Unit) = if (selecting) toggle(f) else open(f)
+}
+
+@Composable
+internal fun rememberFolderPicker() = remember { FolderPicker() }
+
+/** The ⋮ sheet and, while picking, the bottom bar: share all on the network, delete all, select all, cancel. */
+@Composable
+internal fun FolderPickerUi(picker: FolderPicker, folders: List<MediaFolder>, onDelete: (List<MediaFolder>) -> Unit, modifier: Modifier = Modifier) {
+    picker.menuFor?.let { f -> FolderActionsSheet(f) { picker.menuFor = null } }
+    var confirmDelete by remember { mutableStateOf<List<MediaFolder>?>(null) }
+    if (picker.selecting) {
+        val picked = folders.filter { it.path in picker.selected }
+        Row(
+            modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant).navigationBarsPadding().padding(horizontal = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IconButton(picker::clear) { Icon(Icons.Default.Close, "Cancel") }
+            Text("${picked.size} selected", Modifier.weight(1f), fontWeight = FontWeight.Medium)
+            IconButton({ picker.selected = if (picker.selected.size == folders.size) emptySet() else folders.map { it.path }.toSet() }) {
+                Icon(Icons.Default.DoneAll, "Select all")
+            }
+            IconButton({ NetworkShareRequests.request(picked.map { ShareTarget(it.files, it.path) }); picker.clear() }) {
+                Icon(Icons.Default.Wifi, "Share on network")
+            }
+            IconButton({ confirmDelete = picked }) { Icon(Icons.Default.Delete, "Delete") }
+        }
+    }
+    confirmDelete?.let { list ->
+        val count = list.sumOf { it.files.size }
+        PlayerDialog(
+            onDismissRequest = { confirmDelete = null },
+            title = { Text("Delete ${list.size} ${if (list.size == 1) "folder" else "folders"}?") },
+            text = { Text("$count ${if (count == 1) "video" else "videos"} will be deleted from this device. This can't be undone.") },
+            confirmButton = { TextButton({ onDelete(list); confirmDelete = null; picker.clear() }) { Text("DELETE", color = MaterialTheme.colorScheme.error) } },
+            dismissButton = { TextButton({ confirmDelete = null }) { Text("CANCEL") } },
+        )
+    }
+}
+
 @Composable
 internal fun FolderList(
     folders: List<MediaFolder>, opts: ListViewOptions, showPath: Boolean,
     /** Folders holding unplayed "NEW" videos; their icon gets a NEW tag. */
     newFolders: Set<String> = emptySet(),
+    onDelete: (List<MediaFolder>) -> Unit = {},
     onOpen: (MediaFolder) -> Unit,
 ) {
-    // Long-press (or ⋮ in the list) offers folder actions; today that is sharing the whole folder on the network.
-    var menuFor by remember { mutableStateOf<MediaFolder?>(null) }
-    menuFor?.let { f -> FolderActionsSheet(f) { menuFor = null } }
-    if (opts.layout == ListLayout.Grid) {
-        LazyVerticalGrid(GridCells.Adaptive(150.dp), Modifier.fillMaxSize(), contentPadding = PaddingValues(12.dp)) {
-            items(folders, key = { it.path }) { f ->
-                Column(Modifier.combinedClickable(onClick = { onOpen(f) }, onLongClick = { menuFor = f }).padding(6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    FolderIcon(Modifier.size(width = 96.dp, height = 72.dp), f.path in newFolders)
-                    Text(f.name, maxLines = 1, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.primary)
-                    Text("${f.files.size} ${if (f.files.size == 1) "video" else "videos"}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            }
-        }
-    } else {
-        LazyColumn(Modifier.fillMaxSize()) {
-            items(folders, key = { it.path }) { f ->
-                Row(Modifier.fillMaxWidth().height(62.dp).combinedClickable(onClick = { onOpen(f) }, onLongClick = { menuFor = f }).padding(start = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                    FolderIcon(Modifier.size(width = 62.dp, height = 46.dp), f.path in newFolders)
-                    Spacer(Modifier.width(16.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text(f.name.replaceFirstChar { it.uppercaseChar() }, fontSize = 15.sp, lineHeight = 18.sp, color = MaterialTheme.colorScheme.primary, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                        Spacer(Modifier.height(2.dp))
-                        val extra = buildList {
-                            add("${f.files.size} ${if (f.files.size == 1) "video" else "videos"}")
-                            if (ListField.Size in opts.fields) add(formatSize(f.sizeBytes))
-                        }.joinToString(" · ")
-                        Text(extra, fontSize = 12.sp, lineHeight = 15.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        if (showPath || ListField.Path in opts.fields) Text(f.path, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    val picker = rememberFolderPicker()
+    Column(Modifier.fillMaxSize()) {
+        Box(Modifier.weight(1f)) {
+            if (opts.layout == ListLayout.Grid) {
+                LazyVerticalGrid(GridCells.Adaptive(150.dp), Modifier.fillMaxSize(), contentPadding = PaddingValues(12.dp)) {
+                    items(folders, key = { it.path }) { f ->
+                        Column(Modifier.combinedClickable(onClick = { picker.tap(f, onOpen) }, onLongClick = { picker.toggle(f) }).padding(6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                            Box {
+                                FolderIcon(Modifier.size(width = 96.dp, height = 72.dp), f.path in newFolders)
+                                if (picker.selecting) PickMark(f.path in picker.selected, Modifier.align(Alignment.TopStart))
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(f.name, Modifier.weight(1f, fill = false), maxLines = 1, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.primary)
+                                if (!picker.selecting) IconButton({ picker.menuFor = f }, Modifier.size(24.dp)) {
+                                    Icon(Icons.Default.MoreVert, "Folder actions", Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                            Text("${f.files.size} ${if (f.files.size == 1) "video" else "videos"}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
                     }
-                    IconButton({ menuFor = f }) { Icon(Icons.Default.MoreVert, "Folder actions", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
+                }
+            } else {
+                LazyColumn(Modifier.fillMaxSize()) {
+                    items(folders, key = { it.path }) { f ->
+                        val picked = f.path in picker.selected
+                        Row(
+                            Modifier.fillMaxWidth().height(62.dp).background(if (picked) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f) else Color.Transparent)
+                                .combinedClickable(onClick = { picker.tap(f, onOpen) }, onLongClick = { picker.toggle(f) }).padding(start = 16.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Box {
+                                FolderIcon(Modifier.size(width = 62.dp, height = 46.dp), f.path in newFolders)
+                                if (picker.selecting) PickMark(picked, Modifier.align(Alignment.TopStart))
+                            }
+                            Spacer(Modifier.width(16.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(f.name.replaceFirstChar { it.uppercaseChar() }, fontSize = 15.sp, lineHeight = 18.sp, color = MaterialTheme.colorScheme.primary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                                Spacer(Modifier.height(2.dp))
+                                val extra = buildList {
+                                    add("${f.files.size} ${if (f.files.size == 1) "video" else "videos"}")
+                                    if (ListField.Size in opts.fields) add(formatSize(f.sizeBytes))
+                                }.joinToString(" · ")
+                                Text(extra, fontSize = 12.sp, lineHeight = 15.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                if (showPath || ListField.Path in opts.fields) Text(f.path, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                            if (!picker.selecting) IconButton({ picker.menuFor = f }) { Icon(Icons.Default.MoreVert, "Folder actions", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
+                            else Spacer(Modifier.width(12.dp))
+                        }
+                    }
                 }
             }
         }
+        FolderPickerUi(picker, folders, onDelete)
     }
+}
+
+/** The pick circle shown on each folder while picking. */
+@Composable
+internal fun PickMark(picked: Boolean, modifier: Modifier = Modifier) {
+    Icon(
+        if (picked) Icons.Default.CheckCircle else Icons.Outlined.Circle, if (picked) "Picked" else "Not picked",
+        modifier.padding(2.dp).size(20.dp).background(MaterialTheme.colorScheme.background, CircleShape),
+        tint = if (picked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+    )
 }

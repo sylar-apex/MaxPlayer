@@ -50,6 +50,7 @@ import org.app.maxplayerpro.localnetwork.share.Share
 import org.app.maxplayerpro.localnetwork.share.ShareAccess
 import org.app.maxplayerpro.localnetwork.share.ShareStore
 import org.app.maxplayerpro.localnetwork.share.SharingController
+import org.app.maxplayerpro.sharedlogic.usecase.ShareTarget
 import org.koin.compose.koinInject
 import kotlin.time.Instant
 
@@ -65,12 +66,18 @@ internal enum class Mode(val label: String, val hint: String) {
     Private("Private", "Not shared"),
 }
 
+/** Shares [files], or the folder [folderPath], on the network. */
+@Composable
+fun NetworkShareDialog(files: List<MediaFile>, folderPath: String?, onDismiss: () -> Unit) =
+    NetworkShareDialog(listOf(ShareTarget(files, folderPath)), onDismiss)
+
 /**
- * Asks how to share [files] (or the folder [folderPath]) on the network. Opens on the current mode when it is already
- * shared, so the same dialog also changes or ends a share. After sharing it shows the PIN and addresses.
+ * Asks how to share [targets] on the network; several folders picked together get the same mode, PIN and time. With one
+ * target it opens on its current mode when already shared, so the same dialog also changes or ends a share. After
+ * sharing it shows the PIN and addresses.
  */
 @Composable
-fun NetworkShareDialog(files: List<MediaFile>, folderPath: String?, onDismiss: () -> Unit) {
+fun NetworkShareDialog(targets: List<ShareTarget>, onDismiss: () -> Unit) {
     val sharing = koinInject<SharingController>()
     val scope = rememberCoroutineScope()
     if (!sharing.host.supported) {
@@ -81,7 +88,10 @@ fun NetworkShareDialog(files: List<MediaFile>, folderPath: String?, onDismiss: (
     var created by remember { mutableStateOf<Share?>(null) }
     created?.let { ShareCreatedDialog(it, sharing, onDismiss); return }
 
-    val existing = remember { sharing.store.findFor(files, folderPath) }
+    val single = targets.singleOrNull()
+    val files = targets.flatMap { it.files }
+    val folderPath = single?.folderPath
+    val existing = remember { single?.let { sharing.store.findFor(it.files, it.folderPath) } }
     val folderName = folderPath?.substringAfterLast('/')?.ifEmpty { folderPath }
     var title by remember { mutableStateOf(existing?.title ?: folderName ?: if (files.size == 1) files[0].title else "${files.size} files") }
     var mode by remember { mutableStateOf(when (existing?.access) { ShareAccess.Public -> Mode.Public; ShareAccess.Protected -> Mode.Protected; null -> Mode.Public }) }
@@ -95,9 +105,17 @@ fun NetworkShareDialog(files: List<MediaFile>, folderPath: String?, onDismiss: (
         text = {
             Column(Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState())) {
                 val count = "${files.size} ${if (files.size == 1) "file" else "files"}"
-                Text(if (folderPath != null) "Folder · $count. Files added later stay private." else count,
-                    fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                OutlinedTextField(title, { title = it }, Modifier.fillMaxWidth().padding(top = 10.dp), singleLine = true, label = { Text("Name") })
+                val folders = targets.count { it.folderPath != null }
+                Text(
+                    when {
+                        targets.size > 1 -> "${targets.size} items · $count. Each folder keeps its own name. Files added later stay private."
+                        folderPath != null -> "Folder · $count. Files added later stay private."
+                        else -> count
+                    },
+                    fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                if (targets.size == 1) OutlinedTextField(title, { title = it }, Modifier.fillMaxWidth().padding(top = 10.dp), singleLine = true, label = { Text("Name") })
+                else if (folders < targets.size) Text("Files picked on their own are shared together.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
 
                 Label("Mode")
                 Mode.entries.forEach { m ->
@@ -119,13 +137,26 @@ fun NetworkShareDialog(files: List<MediaFile>, folderPath: String?, onDismiss: (
             TextButton({
                 scope.launch {
                     if (mode == Mode.Private) {
-                        existing?.let { sharing.store.delete(it.id) }
+                        // Makes every picked folder or file private again.
+                        targets.forEach { t -> sharing.store.findFor(t.files, t.folderPath)?.let { sharing.store.delete(it.id) } }
                         onDismiss()
                         return@launch
                     }
                     val (starts, expires) = window ?: return@launch
                     val access = if (mode == Mode.Protected) ShareAccess.Protected else ShareAccess.Public
-                    created = sharing.share(title.trim(), files, folderPath, access, pin, starts, expires)
+                    if (single != null) {
+                        created = sharing.share(title.trim(), files, folderPath, access, pin, starts, expires)
+                    } else {
+                        // Folders keep their names; loose files go together in one share.
+                        val loose = targets.filter { it.folderPath == null }.flatMap { it.files }
+                        var last: Share? = null
+                        targets.filter { it.folderPath != null }.forEach { t ->
+                            val path = t.folderPath!!
+                            last = sharing.share(path.substringAfterLast('/').ifEmpty { path }, t.files, t.folderPath, access, pin, starts, expires)
+                        }
+                        if (loose.isNotEmpty()) last = sharing.share(if (loose.size == 1) loose[0].title else "${loose.size} files", loose, null, access, pin, starts, expires)
+                        created = last
+                    }
                 }
             }, enabled = ready) { Text(if (mode == Mode.Private) (if (existing != null) "MAKE PRIVATE" else "CLOSE") else "SHARE") }
         },

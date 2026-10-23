@@ -53,6 +53,7 @@ class HomeViewModel(
         when (event) {
             is HomeContract.Event.SaveViewOptions -> settings[AppKeys.listViewOptions] = event.options.encode()
             HomeContract.Event.Refresh -> viewModelScope.launch { media.refresh() }
+            is HomeContract.Event.DeleteFolders -> viewModelScope.launch { operations.delete(event.folders.flatMap { it.files }) }
             HomeContract.Event.PlayLast -> {
                 val last = currentState.lastPlayed ?: return
                 val opts = currentState.options
