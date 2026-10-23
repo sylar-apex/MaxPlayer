@@ -19,6 +19,7 @@ class LocalNetworkContract {
         data class SetDevicePin(val pin: String?) : Event()
         data class SetDeviceUntil(val untilMs: Long?) : Event()
         data object LogOutAllDevices : Event()
+        data class LogOutDevice(val clientId: String) : Event()
         data class RevokeShare(val id: String) : Event()
         data class MakePrivate(val id: String) : Event()
         // Other devices.

@@ -13,7 +13,7 @@ import org.koin.dsl.module
 fun localNetworkDomainModule() = module {
     includes(platformShareModule())
     single { ShareStore(get<StoreFactory>().open("share")) }
-    single { SharingController(get(), get(), get()) }
+    single { SharingController(get(), get(), get(), get()) }
     single<NetworkShareMarks> { ShareMarksSource(get(), get()) }
     viewModel { LocalNetworkViewModel(get(), get(), get()) }
 }

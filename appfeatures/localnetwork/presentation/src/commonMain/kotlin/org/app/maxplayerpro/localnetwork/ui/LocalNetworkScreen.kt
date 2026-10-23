@@ -1,5 +1,7 @@
 package org.app.maxplayerpro.localnetwork.ui
 
+import androidx.compose.foundation.layout.heightIn
+import org.app.maxplayerpro.localnetwork.share.ViewerSession
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.filled.KeyboardArrowUp
@@ -218,6 +220,7 @@ private fun HostCard(state: LocalNetworkContract.State, onEvent: (Event) -> Unit
     var editingPin by remember { mutableStateOf(false) }
     var editingLimit by remember { mutableStateOf(false) }
     var expanded by rememberSaveable { mutableStateOf(false) }
+    var showingDevices by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
         Card {
             Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -271,13 +274,44 @@ private fun HostCard(state: LocalNetworkContract.State, onEvent: (Event) -> Unit
                     SettingRow(Icons.Default.Timer, "Share device for",
                         state.device.untilMs?.let { "${timeLeft((it - state.nowMs).coerceAtLeast(0))} left" } ?: "No limit") { editingLimit = true }
                     HorizontalDivider(color = MaterialTheme.colorScheme.background)
-                    SettingRow(Icons.AutoMirrored.Filled.Logout, "Log out all devices", null) { onEvent(Event.LogOutAllDevices) }
+                    SettingRow(Icons.AutoMirrored.Filled.Logout, "Log out devices", state.device.sessions.size.takeIf { it > 0 }?.let { "$it signed in" } ?: "None") { showingDevices = true }
                 }
             }
         }
     }
+    if (showingDevices) SignedInDevicesDialog(state.device.sessions, onDismiss = { showingDevices = false }, onEvent)
     if (editingPin) DevicePinDialog(state.device.pin != null, onDismiss = { editingPin = false }) { editingPin = false; onEvent(Event.SetDevicePin(it)) }
     if (editingLimit) DeviceLimitDialog(state.device.untilMs, onDismiss = { editingLimit = false }) { editingLimit = false; onEvent(Event.SetDeviceUntil(it)) }
+}
+
+/** Devices signed in to this one; each can be logged out alone, or all at once. A logged-out device must enter the PIN again. */
+@Composable
+private fun SignedInDevicesDialog(sessions: Map<String, ViewerSession>, onDismiss: () -> Unit, onEvent: (Event) -> Unit) {
+    PlayerDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Signed-in devices") },
+        text = {
+            Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
+                if (sessions.isEmpty()) Text("No device has opened this one yet.", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                sessions.entries.sortedByDescending { it.value.signedInAtMs }.forEach { (id, s) ->
+                    Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(platformIcon(s.platform), null, Modifier.size(22.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(Modifier.width(12.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(s.name, fontSize = 15.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(listOf(s.platform, "since " + formatDate(s.signedInAtMs)).filter { it.isNotBlank() }.joinToString(" · "),
+                                fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        TextButton({ onEvent(Event.LogOutDevice(id)) }) { Text("Log out") }
+                    }
+                }
+                Text("Logging out a device makes it enter the PIN again. Without a device PIN, it can open public shares again but needs the PINs of protected ones.",
+                    Modifier.padding(top = 10.dp), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        },
+        confirmButton = { TextButton(onDismiss) { Text("DONE") } },
+        dismissButton = { TextButton({ onEvent(Event.LogOutAllDevices); onDismiss() }) { Text("LOG OUT ALL", color = MaterialTheme.colorScheme.error) } },
+    )
 }
 
 @Composable

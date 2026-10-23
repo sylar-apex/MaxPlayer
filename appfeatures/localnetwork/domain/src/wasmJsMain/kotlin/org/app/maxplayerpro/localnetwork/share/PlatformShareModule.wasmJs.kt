@@ -9,5 +9,5 @@ import org.koin.dsl.module
 actual fun platformShareModule(): Module = module {
     single<ShareHost> { NoShareHost }
     single<NearbyDiscovery> { NoDiscovery }
-    single { NearbyClient(HttpClient(Js)) }
+    single { NearbyClient(HttpClient(Js)) { SelfDevice(get<ShareStore>().deviceId, "Web browser", "Browser") } }
 }

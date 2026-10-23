@@ -117,6 +117,7 @@ class KtorShareHost(private val store: ShareStore, private val platform: HostPla
             allowHeader(HttpHeaders.Range)
             allowHeader(DEVICE_TOKEN_HEADER)
             allowHeader(SHARE_TOKEN_HEADER)
+            exposeHeader(AUTH_REASON_HEADER)
             exposeHeader(HttpHeaders.ContentRange)
             exposeHeader(HttpHeaders.AcceptRanges)
             exposeHeader(AUTH_HEADER)
@@ -131,13 +132,17 @@ class KtorShareHost(private val store: ShareStore, private val platform: HostPla
                 if (!deviceOpen(now)) return@post call.respond(HttpStatusCode.Gone)
                 if (limited(call, now)) return@post call.respond(HttpStatusCode.TooManyRequests)
                 val device = store.device.value
-                val pin = runCatching { call.receive<LoginRequest>().pin }.getOrDefault("")
-                if (device.pin != null && !samePin(device.pin, pin)) {
+                val req = runCatching { call.receive<LoginRequest>() }.getOrDefault(LoginRequest(""))
+                if (device.pin != null && !samePin(device.pin, req.pin)) {
                     failed(call, now)
                     return@post call.respond(HttpStatusCode.Unauthorized)
                 }
                 failures.remove(call.request.origin.remoteHost)
-                call.respond(LoginResponse(tokens.issue(AccessTokens.DEVICE, device.sessionEpoch, device.untilMs ?: Long.MAX_VALUE)))
+                // Devices that don't say who they are get a one-off id; they show up as "Unknown device".
+                val clientId = req.clientId.filter { it.isLetterOrDigit() }.take(64).ifEmpty { ShareStore.newId() }
+                store.signIn(clientId, ViewerSession(req.clientName.take(80).ifBlank { "Unknown device" }, req.clientPlatform.take(40), now))
+                val epoch = store.device.value.sessionEpoch
+                call.respond(LoginResponse(tokens.issue(AccessTokens.device(clientId), epoch, device.untilMs ?: Long.MAX_VALUE)))
             }
             get("/api/v1/shares") {
                 val now = nowMs()
@@ -169,7 +174,8 @@ class KtorShareHost(private val store: ShareStore, private val platform: HostPla
                     else -> {
                         failures.remove(call.request.origin.remoteHost)
                         val expires = share.expiresAtMs ?: Long.MAX_VALUE
-                        call.respond(UnlockResponse(tokens.issue(AccessTokens.share(share.id), store.device.value.sessionEpoch, expires), expires, share.toRemote(true)))
+                        val clientId = signedInClient(call.request.header(DEVICE_TOKEN_HEADER), now).orEmpty()
+                        call.respond(UnlockResponse(tokens.issue(AccessTokens.share(share.id, clientId), store.device.value.sessionEpoch, expires), expires, share.toRemote(true)))
                     }
                 }
             }
@@ -189,13 +195,22 @@ class KtorShareHost(private val store: ShareStore, private val platform: HostPla
     /** Device-level time limit: past it, nothing on this device opens. */
     private fun deviceOpen(nowMs: Long): Boolean = store.device.value.untilMs?.let { nowMs < it } ?: true
 
-    /** Responds and returns false unless the device is open and, when it has a PIN, [token] is a current device token. */
+    /** The device id behind a current device token whose device is still signed in, else null. */
+    private fun signedInClient(token: String?, nowMs: Long): String? {
+        val device = store.device.value
+        val scope = tokens.read(token, device.sessionEpoch, nowMs)?.takeIf { it.startsWith("device:") } ?: return null
+        return AccessTokens.clientOf(scope).takeIf { it in device.sessions }
+    }
+
+    /** Responds and returns false unless the device is open and, when it has a PIN, [token] belongs to a signed-in device. */
     private suspend fun admitDevice(call: ApplicationCall, token: String?, nowMs: Long): Boolean {
         val device = store.device.value
         return when {
             !deviceOpen(nowMs) -> { call.respond(HttpStatusCode.Gone); false }
-            device.pin != null && !tokens.valid(token, AccessTokens.DEVICE, device.sessionEpoch, nowMs) -> {
+            device.pin != null && signedInClient(token, nowMs) == null -> {
                 call.response.header(AUTH_HEADER, AUTH_DEVICE)
+                // A token we issued that no longer works means the owner logged this device out.
+                if (tokens.genuine(token)) call.response.header(AUTH_REASON_HEADER, AUTH_REASON_LOGGED_OUT)
                 call.respond(HttpStatusCode.Unauthorized)
                 false
             }
@@ -209,14 +224,24 @@ class KtorShareHost(private val store: ShareStore, private val platform: HostPla
             share == null || share.revoked -> call.respond(HttpStatusCode.NotFound)
             share.isExpired(nowMs) -> call.respond(HttpStatusCode.Gone)
             !share.isOpen(nowMs) -> call.respond(HttpStatusCode.Forbidden)
-            !canOpen(share, token, nowMs) -> { call.response.header(AUTH_HEADER, AUTH_SHARE); call.respond(HttpStatusCode.Unauthorized) }
+            !canOpen(share, token, nowMs) -> {
+                call.response.header(AUTH_HEADER, AUTH_SHARE)
+                if (tokens.genuine(token)) call.response.header(AUTH_REASON_HEADER, AUTH_REASON_LOGGED_OUT)
+                call.respond(HttpStatusCode.Unauthorized)
+            }
             else -> return true
         }
         return false
     }
 
-    private fun canOpen(share: Share, token: String?, nowMs: Long): Boolean =
-        share.access == ShareAccess.Public || tokens.valid(token, AccessTokens.share(share.id), store.device.value.sessionEpoch, nowMs)
+    /** Public, or [token] opens this share for a device that is still signed in (or never signed in, on a device without a PIN). */
+    private fun canOpen(share: Share, token: String?, nowMs: Long): Boolean {
+        if (share.access == ShareAccess.Public) return true
+        val device = store.device.value
+        val scope = tokens.read(token, device.sessionEpoch, nowMs)?.takeIf { it.startsWith("share:${share.id}:") } ?: return false
+        val clientId = AccessTokens.clientOf(scope)
+        return clientId in device.sessions || (clientId.isEmpty() && device.pin == null)
+    }
 
     private fun limited(call: ApplicationCall, nowMs: Long): Boolean {
         val f = failures[call.request.origin.remoteHost]?.takeIf { nowMs - it.windowStartMs < FAILURE_WINDOW_MS }

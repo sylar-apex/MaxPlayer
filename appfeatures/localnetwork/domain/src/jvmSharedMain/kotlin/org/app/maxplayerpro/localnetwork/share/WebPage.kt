@@ -54,6 +54,10 @@ const dur = (ms) => { if (!ms) return ''; const s = Math.round(ms/1000), h = Mat
   return (h ? h+':'+String(m).padStart(2,'0') : m) + ':' + String(x).padStart(2,'0'); };
 const until = (ms) => ms ? 'Until ' + new Date(ms).toLocaleString() : 'No time limit';
 const save = () => { try { localStorage.setItem(keyOf(device.id), JSON.stringify(access)); } catch (e) {} };
+// This browser's id, so the owner sees it under "Log out devices" and can log it out.
+const clientId = (() => { try { let id = localStorage.getItem('mp-client-id'); if (!id) { id = Array.from(crypto.getRandomValues(new Uint8Array(16)), b => b.toString(16).padStart(2, '0')).join(''); localStorage.setItem('mp-client-id', id); } return id; } catch (e) { return ''; } })();
+const clientName = 'Web browser' + (navigator.platform ? ' (' + navigator.platform + ')' : '');
+const login = (pin) => fetch('/api/v1/login', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ pin, clientId, clientName, clientPlatform: 'Browser' }) });
 const headers = (t) => { const h = {}; if (access.d) h['X-Device-Token'] = access.d; if (t) h['X-Share-Token'] = t; return h; };
 
 async function load() {
@@ -62,8 +66,14 @@ async function load() {
     ${'$'}('title').textContent = device.name;
     try { access = JSON.parse(localStorage.getItem(keyOf(device.id))) || access; } catch (e) {}
     if (device.pinRequired && !access.d) return askDevicePin();
+    if (!access.d) { const l = await login(''); if (l.ok) { access = { d: (await l.json()).token, t: {} }; save(); } }
     const r = await fetch('/api/v1/shares', { headers: headers() });
-    if (r.status === 401) { access = { d: null, t: {} }; save(); return askDevicePin(); }
+    if (r.status === 401) {
+      const loggedOut = r.headers.get('X-Auth-Reason') === 'logged-out';
+      access = { d: null, t: {} }; save();
+      if (!device.pinRequired) return load();
+      return askDevicePin(loggedOut ? 'You were logged out of this device. Enter its PIN again.' : null);
+    }
     if (r.status === 410) { ${'$'}('sub').textContent = 'Sharing time is over'; return; }
     const shares = await r.json();
     for (const s of shares.filter(s => s.locked && access.t[s.id])) {
@@ -87,13 +97,13 @@ function pinForm(label, onPin) {
 
 const failText = (status) => status === 429 ? 'Too many wrong PINs. Wait a minute.' : status === 410 ? 'Sharing time is over.' : 'Wrong PIN.';
 
-function askDevicePin() {
-  ${'$'}('sub').textContent = 'This device has a PIN';
+function askDevicePin(note) {
+  ${'$'}('sub').textContent = note || 'This device has a PIN';
   const list = ${'$'}('list'); list.innerHTML = '';
   const box = document.createElement('div'); box.className = 'share';
   box.innerHTML = '<div class="head"><b>Enter the device PIN</b><span class="meta">Asked once on this browser</span></div>';
   box.appendChild(pinForm('Device PIN', async (pin) => {
-    const r = await fetch('/api/v1/login', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ pin }) });
+    const r = await login(pin);
     if (!r.ok) return failText(r.status);
     access = { d: (await r.json()).token, t: {} }; save(); load();
   }));

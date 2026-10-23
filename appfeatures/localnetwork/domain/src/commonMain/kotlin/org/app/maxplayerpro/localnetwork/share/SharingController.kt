@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import org.app.kmediaplayer.KMediaPlayer
 import org.app.kmediaplayer.model.MediaFile
 import org.app.kmediaplayer.util.nowMs
 
@@ -17,11 +18,13 @@ import org.app.kmediaplayer.util.nowMs
  * One owner for sharing: remembers whether the user turned hosting on, turns it off when the device's time limit
  * passes, and runs discovery while this device hosts (to answer others) or while any screen is browsing for devices.
  */
-class SharingController(val store: ShareStore, val host: ShareHost, val discovery: NearbyDiscovery) {
+class SharingController(val store: ShareStore, val host: ShareHost, val discovery: NearbyDiscovery, client: NearbyClient) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val browsers = MutableStateFlow(0)
 
     init {
+        // When a shared video stops playing, the player asks here and can say "stopped sharing" instead of a code.
+        KMediaPlayer.explainStreamError = client::explainMedia
         scope.launch {
             combine(host.state, browsers) { state, count -> state is HostState.Running || count > 0 }
                 .distinctUntilChanged()

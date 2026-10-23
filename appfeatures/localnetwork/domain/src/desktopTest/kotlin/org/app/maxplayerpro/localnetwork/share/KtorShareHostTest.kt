@@ -218,6 +218,41 @@ class KtorShareHostTest {
     }
 
     @Test
+    fun ownerCanLogOutOneDeviceAndItIsToldWhy() = runBlocking {
+        store.save("Clip", listOf(media()), null, ShareAccess.Public, null, nowMs(), null, null)
+        store.setDevicePin("2468")
+        val login = { id: String, name: String ->
+            json.decodeFromString<LoginResponse>(post("/api/v1/login", """{"pin":"2468","clientId":"$id","clientName":"$name","clientPlatform":"Android"}""").body()).token
+        }
+        val phone = login("phone1", "Pixel")
+        val laptop = login("laptop1", "MacBook")
+        assertEquals(setOf("phone1", "laptop1"), store.device.value.sessions.keys)
+        assertEquals("Pixel", store.device.value.sessions.getValue("phone1").name)
+
+        store.logOutDevice("phone1")
+        val refused = get("/api/v1/shares", deviceToken = phone)
+        assertEquals(401, refused.statusCode())
+        assertEquals(AUTH_REASON_LOGGED_OUT, refused.headers().firstValue(AUTH_REASON_HEADER).orElse(""))
+        assertEquals(200, get("/api/v1/shares", deviceToken = laptop).statusCode())
+
+        // Signing in again with the PIN works; a forged token is refused without the "logged out" reason.
+        assertEquals(200, get("/api/v1/shares", deviceToken = login("phone1", "Pixel")).statusCode())
+        assertFalse(get("/api/v1/shares", deviceToken = "x.y").headers().firstValue(AUTH_REASON_HEADER).isPresent)
+    }
+
+    @Test
+    fun protectedShareTokenDiesWithItsDevicesSession() = runBlocking {
+        val share = store.save("Secret", listOf(media()), null, ShareAccess.Protected, "9090", nowMs(), null, null)
+        val device = json.decodeFromString<LoginResponse>(post("/api/v1/login", """{"pin":"","clientId":"tv1","clientName":"TV"}""").body()).token
+        val unlock = http.send(HttpRequest.newBuilder(URI("$base/api/v1/shares/${share.id}/unlock")).header("Content-Type", "application/json")
+            .header(DEVICE_TOKEN_HEADER, device).POST(HttpRequest.BodyPublishers.ofString("""{"code":"9090"}""")).build(), HttpResponse.BodyHandlers.ofString())
+        val token = json.decodeFromString<UnlockResponse>(unlock.body()).token
+        assertEquals(206, get("/media/${share.id}/0/x.mp4?d=$device&t=$token", "bytes=0-9").statusCode())
+        store.logOutDevice("tv1")
+        assertEquals(401, get("/media/${share.id}/0/x.mp4?d=$device&t=$token", "bytes=0-9").statusCode())
+    }
+
+    @Test
     fun clientNormalizesAddresses() {
         assertEquals("http://192.168.1.5:$DEFAULT_SHARE_PORT", NearbyClient.normalizeAddress(" 192.168.1.5/ "))
         assertEquals("http://192.168.1.5:8080", NearbyClient.normalizeAddress("192.168.1.5:8080"))

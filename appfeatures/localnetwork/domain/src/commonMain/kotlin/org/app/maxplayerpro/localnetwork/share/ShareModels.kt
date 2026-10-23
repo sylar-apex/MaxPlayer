@@ -68,8 +68,9 @@ data class DeviceInfo(
     val pinRequired: Boolean = false,
 )
 
+/** Signs a device in; [clientId] names the device so the owner can see it and log it out on its own. */
 @Serializable
-data class LoginRequest(val pin: String)
+data class LoginRequest(val pin: String, val clientId: String = "", val clientName: String = "", val clientPlatform: String = "")
 
 /** A device token, valid until the owner logs everyone out or changes the device PIN. */
 @Serializable
@@ -112,6 +113,9 @@ const val SHARE_TOKEN_HEADER = "X-Share-Token"
 /** Response header telling which PIN is missing on a 401: [AUTH_DEVICE] or [AUTH_SHARE]. */
 const val AUTH_HEADER = "X-Auth-Needed"
 const val AUTH_DEVICE = "device"
+/** Sent with a device 401 when the token was real but the owner has logged that device out. */
+const val AUTH_REASON_HEADER = "X-Auth-Reason"
+const val AUTH_REASON_LOGGED_OUT = "logged-out"
 const val AUTH_SHARE = "share"
 
 const val PROTOCOL_VERSION = 2

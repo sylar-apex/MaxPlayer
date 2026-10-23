@@ -18,7 +18,13 @@ data class DeviceSharing(
     val pin: String? = null,
     val untilMs: Long? = null,
     val sessionEpoch: Int = 0,
+    /** Devices signed in to this one, by their device id; removing one logs that device out. */
+    val sessions: Map<String, ViewerSession> = emptyMap(),
 )
+
+/** Another device that opened this one: shown in "Log out devices". */
+@Serializable
+data class ViewerSession(val name: String, val platform: String, val signedInAtMs: Long)
 
 /** PINs this device entered on another device, kept as the tokens they returned until that device logs us out. */
 @Serializable
@@ -112,12 +118,21 @@ class ShareStore(private val store: KeyValueStore) {
     suspend fun setDevicePin(pin: String?) = lock.withLock {
         // A new or removed PIN logs out every device that used the old one.
         val d = _device.value
-        writeDevice(d.copy(pin = pin?.filter { it.isLetterOrDigit() }?.ifEmpty { null }, sessionEpoch = d.sessionEpoch + 1))
+        writeDevice(d.copy(pin = pin?.filter { it.isLetterOrDigit() }?.ifEmpty { null }, sessionEpoch = d.sessionEpoch + 1, sessions = emptyMap()))
     }
 
     suspend fun setDeviceUntil(untilMs: Long?) = lock.withLock { writeDevice(_device.value.copy(untilMs = untilMs)) }
 
-    suspend fun logOutAllDevices() = lock.withLock { writeDevice(_device.value.copy(sessionEpoch = _device.value.sessionEpoch + 1)) }
+    suspend fun logOutAllDevices() = lock.withLock {
+        writeDevice(_device.value.copy(sessionEpoch = _device.value.sessionEpoch + 1, sessions = emptyMap()))
+    }
+
+    suspend fun logOutDevice(clientId: String) = lock.withLock { writeDevice(_device.value.copy(sessions = _device.value.sessions - clientId)) }
+
+    suspend fun signIn(clientId: String, session: ViewerSession) = lock.withLock {
+        val d = _device.value
+        if (d.sessions[clientId]?.name != session.name) writeDevice(d.copy(sessions = d.sessions + (clientId to session)))
+    }
 
     suspend fun remember(deviceId: String, change: (RememberedAccess) -> RememberedAccess?) = lock.withLock {
         val current = _remembered.value

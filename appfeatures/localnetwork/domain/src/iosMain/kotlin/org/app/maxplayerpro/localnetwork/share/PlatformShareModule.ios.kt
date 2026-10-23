@@ -9,5 +9,5 @@ import org.koin.dsl.module
 actual fun platformShareModule(): Module = module {
     single<ShareHost> { NoShareHost }
     single<NearbyDiscovery> { NoDiscovery }
-    single { NearbyClient(HttpClient(Darwin)) }
+    single { NearbyClient(HttpClient(Darwin)) { SelfDevice(get<ShareStore>().deviceId, "iPhone", "iOS") } }
 }

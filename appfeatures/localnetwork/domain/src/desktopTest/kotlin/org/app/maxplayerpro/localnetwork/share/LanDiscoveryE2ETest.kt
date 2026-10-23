@@ -33,8 +33,9 @@ class LanDiscoveryE2ETest {
         }
         val store = ShareStore(MemoryStore())
         val host = KtorShareHost(store, platform)
-        val discovery = MulticastDiscovery(store, host, platform, NearbyClient(HttpClient(CIO)))
-        val sharing = SharingController(store, host, discovery)
+        val client = NearbyClient(HttpClient(CIO)) { SelfDevice(store.deviceId, platform.deviceName, platform.platform) }
+        val discovery = MulticastDiscovery(store, host, platform, client)
+        val sharing = SharingController(store, host, discovery, client)
         sharing.share("Mac test share", listOf(MediaFile(1, "file://${file.path}", file.path, file.name, file.length(), 0, 0, width = System.getenv("LAN_E2E_W")?.toInt() ?: 0, height = System.getenv("LAN_E2E_H")?.toInt() ?: 0)),
             null, ShareAccess.Public, null, null, nowMs() + 3_600_000)
         // Optional: a device PIN, and a protected folder share of the same file with its own PIN.

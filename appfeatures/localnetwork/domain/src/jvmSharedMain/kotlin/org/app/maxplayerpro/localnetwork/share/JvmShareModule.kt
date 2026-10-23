@@ -8,7 +8,11 @@ import org.koin.dsl.module
 /** Hosting and discovery for Android and desktop; [platform] supplies the parts that differ. */
 internal fun jvmShareModule(platform: org.koin.core.scope.Scope.() -> HostPlatform): Module = module {
     single { platform() }
-    single { NearbyClient(HttpClient(CIO)) }
+    single {
+        val store = get<ShareStore>()
+        val host = get<HostPlatform>()
+        NearbyClient(HttpClient(CIO)) { SelfDevice(store.deviceId, host.deviceName, host.platform) }
+    }
     single<ShareHost> { KtorShareHost(get(), get()) }
     single<NearbyDiscovery> { MulticastDiscovery(get(), get(), get(), get()) }
 }

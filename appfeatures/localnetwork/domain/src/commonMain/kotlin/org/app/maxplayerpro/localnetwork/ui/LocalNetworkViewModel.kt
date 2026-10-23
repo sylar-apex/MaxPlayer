@@ -12,6 +12,7 @@ import kotlinx.coroutines.launch
 import org.app.kmediaplayer.util.nowMs
 import org.app.maxplayerpro.localnetwork.share.NearbyClient
 import org.app.maxplayerpro.localnetwork.share.NearbyException
+import org.app.maxplayerpro.localnetwork.share.RememberedAccess
 import org.app.maxplayerpro.localnetwork.share.RemoteShare
 import org.app.maxplayerpro.localnetwork.share.SharingController
 import org.app.maxplayerpro.localnetwork.ui.LocalNetworkContract.DeviceEntry
@@ -81,6 +82,11 @@ class LocalNetworkViewModel(
             is Event.SetDevicePin -> viewModelScope.launch { store.setDevicePin(event.pin) }
             is Event.SetDeviceUntil -> viewModelScope.launch { store.setDeviceUntil(event.untilMs) }
             Event.LogOutAllDevices -> viewModelScope.launch { store.logOutAllDevices(); operations.toast("All devices logged out") }
+            is Event.LogOutDevice -> viewModelScope.launch {
+                val name = store.device.value.sessions[event.clientId]?.name
+                store.logOutDevice(event.clientId)
+                operations.toast("${name ?: "Device"} logged out")
+            }
             is Event.RevokeShare -> viewModelScope.launch { store.revoke(event.id) }
             is Event.MakePrivate -> viewModelScope.launch { store.delete(event.id) }
             is Event.AddAddress -> {
@@ -143,9 +149,24 @@ class LocalNetworkViewModel(
             val result = runCatching {
                 val info = client.info(baseUrl)
                 editOpen { it.copy(id = info.id, name = info.name) }
-                val access = store.remembered.value[info.id]
+                var access = store.remembered.value[info.id]
                 if (info.pinRequired && access?.deviceToken == null) throw NearbyException(NearbyException.Kind.DevicePinNeeded, "")
-                val shares = client.shares(baseUrl, access?.deviceToken)
+                // Without a PIN, sign in quietly so the owner sees this device and can log it out.
+                if (!info.pinRequired && access?.deviceToken == null) {
+                    val token = client.login(baseUrl, "")
+                    store.remember(info.id) { it.copy(deviceToken = token) }
+                    access = store.remembered.value[info.id]
+                }
+                val shares = try {
+                    client.shares(baseUrl, access?.deviceToken)
+                } catch (e: NearbyException) {
+                    // Logged out of a device without a PIN: sign in again, which the owner allows.
+                    if (e.kind != NearbyException.Kind.DevicePinNeeded || info.pinRequired) throw e
+                    val token = client.login(baseUrl, "")
+                    store.remember(info.id) { RememberedAccess(deviceToken = token) }
+                    access = store.remembered.value[info.id]
+                    client.shares(baseUrl, token)
+                }
                 // Reopen protected shares unlocked before; a token the owner voided just drops out.
                 val unlocked = shares.filter { it.locked }.mapNotNull { s ->
                     val token = access?.shareTokens?.get(s.id) ?: return@mapNotNull null
@@ -163,7 +184,10 @@ class LocalNetworkViewModel(
                 if (ex?.kind == NearbyException.Kind.DevicePinNeeded) {
                     // Logged out by the owner (or never signed in): forget what we had and ask again.
                     currentState.open?.id?.let { id -> store.remember(id) { null } }
-                    updateState { copy(open = open?.copy(loading = false, shares = emptyList(), unlocked = emptyMap(), openShareId = null), prompt = PinPrompt()) }
+                    updateState {
+                        copy(open = open?.copy(loading = false, shares = emptyList(), unlocked = emptyMap(), openShareId = null, openGroup = null),
+                            prompt = PinPrompt(error = ex.message.takeIf { ex.loggedOut }))
+                    }
                 } else if (!quiet) {
                     editOpen { it.copy(loading = false, error = ex?.message ?: "Could not reach the device") }
                 }
