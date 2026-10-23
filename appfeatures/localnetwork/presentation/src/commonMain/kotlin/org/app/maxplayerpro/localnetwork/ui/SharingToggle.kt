@@ -1,8 +1,8 @@
 package org.app.maxplayerpro.localnetwork.ui
 
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Wifi
-import androidx.compose.material.icons.filled.WifiOff
+import androidx.compose.material.icons.filled.Sensors
+import androidx.compose.material.icons.filled.SensorsOff
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -29,7 +29,7 @@ fun SharingToggle(modifier: Modifier = Modifier) {
     val on = state is HostState.Running || state == HostState.Starting
     IconButton({ scope.launch { if (on) sharing.stopHosting() else sharing.startHosting() } }, modifier) {
         Icon(
-            if (on) Icons.Default.Wifi else Icons.Default.WifiOff,
+            if (on) Icons.Default.Sensors else Icons.Default.SensorsOff,
             if (on) "Sharing on network: on. Tap to turn off" else "Sharing on network: off. Tap to turn on",
             tint = if (state is HostState.Running) SharingOn else MaterialTheme.colorScheme.onSurfaceVariant,
         )

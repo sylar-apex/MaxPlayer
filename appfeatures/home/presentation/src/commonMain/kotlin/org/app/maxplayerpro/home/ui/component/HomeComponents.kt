@@ -50,7 +50,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Wifi
+import androidx.compose.material.icons.filled.Sensors
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalBottomSheet
@@ -106,7 +106,7 @@ private fun FolderActionsSheet(folder: MediaFolder, onDismiss: () -> Unit) {
             Modifier.fillMaxWidth().height(48.dp).clickable { onDismiss(); NetworkShareRequests.request(folder.files, folder.path) }.padding(horizontal = 20.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Icon(Icons.Default.Wifi, null, Modifier.size(22.dp))
+            Icon(Icons.Default.Sensors, null, Modifier.size(22.dp))
             Spacer(Modifier.width(20.dp))
             Column {
                 Text("Share on network", fontSize = 15.sp)
@@ -171,7 +171,7 @@ internal fun FolderPickerUi(picker: FolderPicker, folders: List<MediaFolder>, on
                 Icon(Icons.Default.DoneAll, "Select all")
             }
             IconButton({ NetworkShareRequests.request(picked.map { ShareTarget(it.files, it.path) }); picker.clear() }) {
-                Icon(Icons.Default.Wifi, "Share on network")
+                Icon(Icons.Default.Sensors, "Share on network")
             }
             IconButton({ confirmDelete = picked }) { Icon(Icons.Default.Delete, "Delete") }
         }

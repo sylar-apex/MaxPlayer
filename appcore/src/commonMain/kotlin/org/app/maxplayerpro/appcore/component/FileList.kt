@@ -41,7 +41,7 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Wifi
+import androidx.compose.material.icons.filled.Sensors
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -197,7 +197,7 @@ fun FileList(
             Row(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant).navigationBarsPadding(), horizontalArrangement = Arrangement.SpaceEvenly) {
                 IconButton({ selected = if (selected.size == files.size) emptySet() else files.map { it.uri }.toSet() }) { Icon(Icons.Default.DoneAll, "Select all") }
                 IconButton({ send(Event.Share(selFiles)) }) { Icon(Icons.Default.Share, "Share") }
-                IconButton({ send(Event.ShareOnNetwork(selFiles)); selected = emptySet() }) { Icon(Icons.Default.Wifi, "Share on network") }
+                IconButton({ send(Event.ShareOnNetwork(selFiles)); selected = emptySet() }) { Icon(Icons.Default.Sensors, "Share on network") }
                 IconButton({ addToPlaylist = selFiles }) { Icon(Icons.AutoMirrored.Filled.PlaylistPlay, "Add to playlist") }
                 IconButton({ send(Event.LockInPrivate(selFiles)); selected = emptySet() }) { Icon(Icons.Default.Lock, "Lock") }
                 IconButton({ selFiles.singleOrNull()?.let { renaming = it } }, enabled = selected.size == 1) { Icon(Icons.Default.Edit, "Rename") }
