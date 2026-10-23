@@ -40,6 +40,12 @@ class LanDiscoveryE2ETest {
             null, ShareAccess.Public, null, null, nowMs() + 3_600_000, allowDownload = System.getenv("LAN_E2E_DL") == "1")
         // Optional: a device PIN, and a protected folder share of the same file with its own PIN.
         System.getenv("LAN_E2E_PIN")?.let { store.setDevicePin(it) }
+        // Optional: a folder of images, shared as a public folder (for photo grids on the other side).
+        System.getenv("LAN_E2E_IMAGES")?.let { dir ->
+            val images = File(dir).listFiles { f -> f.extension.lowercase() in setOf("png", "jpg", "jpeg") }.orEmpty().sortedBy { it.name }
+                .mapIndexed { i, f -> MediaFile(100L + i, "file://${f.path}", f.path, f.name, f.length(), 0, 0, mimeType = if (f.extension == "png") "image/png" else "image/jpeg") }
+            if (images.isNotEmpty()) sharing.share(File(dir).name, images, dir, ShareAccess.Public, null, null, null, allowDownload = true)
+        }
         System.getenv("LAN_E2E_LOOSE_PIN")?.let { pin ->
             sharing.share("Protected clip", listOf(MediaFile(3, "file://${file.path}#3", file.path, "Protected clip.mp4", file.length(), 0, 0)),
                 null, ShareAccess.Protected, pin, null, null)

@@ -265,6 +265,7 @@ class KtorShareHost(private val store: ShareStore, private val platform: HostPla
     private fun Share.toRemote(withItems: Boolean) = RemoteShare(
         id = id, title = title, locked = access == ShareAccess.Protected, itemCount = items.size, expiresAtMs = expiresAtMs, folder = isFolder,
         audio = items.isNotEmpty() && items.all { it.isAudio }, downloadable = allowDownload,
+        kind = kindOf(items.map { it.mimeType }, items.isNotEmpty() && items.all { it.isAudio }),
         items = if (withItems) items.map {
             val name = it.name.encodeURLPathPart()
             RemoteItem(it.id, it.name, it.sizeBytes, it.durationMs, it.mimeType, it.isAudio, "/media/$id/${it.id}/$name", it.width, it.height,

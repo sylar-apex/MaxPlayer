@@ -71,6 +71,10 @@ class LocalNetworkViewModel(
             }
         }
         viewModelScope.launch { while (isActive) { updateState { copy(nowMs = nowMs()) }; delay(30_000) } }
+        // The open device's tokens, so the screen can build photo and file URLs.
+        viewModelScope.launch {
+            store.remembered.collect { all -> updateState { copy(open = open?.let { o -> all[o.id].let { a -> o.copy(deviceToken = a?.deviceToken, shareTokens = a?.shareTokens.orEmpty()) } }) } }
+        }
     }
 
     override fun onCleared() {
@@ -155,7 +159,7 @@ class LocalNetworkViewModel(
             if (!quiet) editOpen { it.copy(loading = true, error = null) }
             val result = runCatching {
                 val info = client.info(baseUrl)
-                editOpen { it.copy(id = info.id, name = info.name) }
+                editOpen { it.copy(id = info.id, name = info.name, deviceToken = store.remembered.value[info.id]?.deviceToken, shareTokens = store.remembered.value[info.id]?.shareTokens.orEmpty()) }
                 var access = store.remembered.value[info.id]
                 if (info.pinRequired && access?.deviceToken == null) throw NearbyException(NearbyException.Kind.DevicePinNeeded, "")
                 // Without a PIN, sign in quietly so the owner sees this device and can log it out.
@@ -185,7 +189,8 @@ class LocalNetworkViewModel(
                 shares to unlocked
             }
             result.onSuccess { (shares, unlocked) ->
-                editOpen { o -> o.copy(loading = false, error = null, shares = shares, unlocked = unlocked, openShareId = o.openShareId?.takeIf { id -> shares.any { it.id == id } }) }
+                val a = currentState.open?.id?.let { store.remembered.value[it] }
+                editOpen { o -> o.copy(deviceToken = a?.deviceToken, shareTokens = a?.shareTokens.orEmpty(), loading = false, error = null, shares = shares, unlocked = unlocked, openShareId = o.openShareId?.takeIf { id -> shares.any { it.id == id } }) }
             }.onFailure { e ->
                 val ex = e as? NearbyException
                 if (ex?.kind == NearbyException.Kind.DevicePinNeeded) {

@@ -7,6 +7,11 @@ import org.app.maxplayerpro.localnetwork.share.DeviceSharing
 import org.app.maxplayerpro.localnetwork.share.DownloadTask
 import org.app.maxplayerpro.localnetwork.share.SaveLocation
 import org.app.maxplayerpro.localnetwork.share.HostState
+import org.app.maxplayerpro.localnetwork.share.KIND_AUDIO
+import org.app.maxplayerpro.localnetwork.share.KIND_FILE
+import org.app.maxplayerpro.localnetwork.share.KIND_IMAGE
+import org.app.maxplayerpro.localnetwork.share.KIND_VIDEO
+import org.app.maxplayerpro.localnetwork.share.RemoteItem
 import org.app.maxplayerpro.localnetwork.share.RemoteShare
 import org.app.maxplayerpro.localnetwork.share.Share
 
@@ -69,21 +74,34 @@ class LocalNetworkContract {
         val unlocked: Map<String, RemoteShare> = emptyMap(),
         val openShareId: String? = null,
         val openGroup: Group? = null,
+        val deviceToken: String? = null,
+        val shareTokens: Map<String, String> = emptyMap(),
     ) {
         /** [share] with its items when it can be opened now, else null. */
         fun openable(share: RemoteShare): RemoteShare? = unlocked[share.id] ?: share.takeIf { !it.locked && it.items.isNotEmpty() }
 
         /** Files shared on their own (not as a folder) that belong in [group]. */
-        fun loose(group: Group): List<RemoteShare> = shares.filter { !it.folder && it.locked == group.protected && it.audio == group.audio }
+        fun loose(group: Group): List<RemoteShare> = shares.filter { !it.folder && it.locked == group.protected && (if (it.audio) KIND_AUDIO else it.kind) == group.kind }
+
+        /** URL of [item] in [share] with this device's tokens, for players and image loading. */
+        fun urlOf(share: RemoteShare, item: RemoteItem): String {
+            val query = listOfNotNull(deviceToken?.let { "d=$it" }, shareTokens[share.id]?.takeIf { it.isNotEmpty() }?.let { "t=$it" })
+                .joinToString("&").let { if (it.isEmpty()) "" else "?$it" }
+            return baseUrl + item.path + query
+        }
     }
 
     /**
      * Where files shared on their own appear on the viewing side: one folder per kind, split by protection. A protected
      * file still has its own PIN; the group only gathers them.
      */
-    enum class Group(val title: String, val protected: Boolean, val audio: Boolean) {
-        Videos("Videos", false, false), ProtectedVideos("Protected videos", true, false),
-        Music("Music", false, true), ProtectedMusic("Protected music", true, true),
+    enum class Group(val title: String, val protected: Boolean, val kind: String) {
+        Videos("Videos", false, KIND_VIDEO), ProtectedVideos("Protected videos", true, KIND_VIDEO),
+        Music("Music", false, KIND_AUDIO), ProtectedMusic("Protected music", true, KIND_AUDIO),
+        Photos("Photos", false, KIND_IMAGE), ProtectedPhotos("Protected photos", true, KIND_IMAGE),
+        Files("Files", false, KIND_FILE), ProtectedFiles("Protected files", true, KIND_FILE);
+
+        val audio: Boolean get() = kind == KIND_AUDIO
     }
 
     /** A PIN being asked for: the open device's, or [share]'s when set. */

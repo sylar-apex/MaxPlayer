@@ -92,7 +92,23 @@ data class RemoteShare(
     val audio: Boolean = false,
     /** The owner allows saving these files; items then carry a [RemoteItem.downloadPath]. */
     val downloadable: Boolean = false,
+    /** What the files are: [KIND_VIDEO], [KIND_AUDIO], [KIND_IMAGE] or [KIND_FILE] (anything else, or a mix with other files). */
+    val kind: String = KIND_VIDEO,
 )
+
+const val KIND_VIDEO = "video"
+const val KIND_AUDIO = "audio"
+const val KIND_IMAGE = "image"
+const val KIND_FILE = "file"
+
+/** The kind of a set of files, from their MIME types. */
+fun kindOf(mimeTypes: List<String>, allAudio: Boolean): String = when {
+    mimeTypes.isEmpty() -> KIND_VIDEO
+    allAudio || mimeTypes.all { it.startsWith("audio/") } -> KIND_AUDIO
+    mimeTypes.all { it.startsWith("image/") } -> KIND_IMAGE
+    mimeTypes.all { it.startsWith("video/") || it.isEmpty() } -> KIND_VIDEO
+    else -> KIND_FILE
+}
 
 /** A playable item; [path] is relative to the host and carries no access token. */
 @Serializable

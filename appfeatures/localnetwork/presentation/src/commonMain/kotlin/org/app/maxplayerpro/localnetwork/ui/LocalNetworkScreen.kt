@@ -1,5 +1,22 @@
 package org.app.maxplayerpro.localnetwork.ui
 
+import org.app.maxplayerpro.localnetwork.share.RemoteItem
+import org.app.maxplayerpro.localnetwork.share.KIND_VIDEO
+import org.app.maxplayerpro.localnetwork.share.KIND_IMAGE
+import org.app.maxplayerpro.localnetwork.share.KIND_FILE
+import org.app.maxplayerpro.localnetwork.share.KIND_AUDIO
+import androidx.compose.material.icons.automirrored.filled.InsertDriveFile
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import coil3.compose.AsyncImage
+import org.app.maxplayerpro.appcore.component.PhotoViewer
+import org.app.maxplayerpro.appcore.component.PhotoRef
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.CheckCircle
 import org.app.maxplayerpro.sharedlogic.platform.PlatformApp
@@ -392,6 +409,8 @@ private fun DeviceContent(state: LocalNetworkContract.State, open: LocalNetworkC
     val canDownload = state.canDownload
     // The file whose save sheet is open: (share with items, item index).
     var saving by remember { mutableStateOf<Pair<RemoteShare, Int>?>(null) }
+    // Photos open full screen: (photos, starting index).
+    var photoView by remember { mutableStateOf<Pair<List<PhotoRef>, Int>?>(null) }
     saving?.let { (share, i) ->
         share.items.getOrNull(i)?.let { item ->
             DownloadSheet(item.name, item.sizeBytes, state.downloadsLabel, onDismiss = { saving = null }) { name, location ->
@@ -418,24 +437,43 @@ private fun DeviceContent(state: LocalNetworkContract.State, open: LocalNetworkC
         }
         PullRefresh(refreshing, { onEvent(Event.Refresh) }, Modifier.fillMaxWidth().weight(1f)) {
         when {
+            folder != null && folder.items.isNotEmpty() && folder.items.all { it.mimeType.startsWith("image/") } ->
+                RemotePhotoGrid(folder.items.map { folder to it }, open) { i -> photoView = folder.items.map { PhotoRef(open.urlOf(folder, it), it.name) } to i }
             folder != null -> LazyColumn(Modifier.fillMaxSize()) {
                 itemsIndexed(folder.items, key = { _, it -> it.id }) { i, item ->
                     FileRow(item.name, item.isAudio, item.durationMs, item.sizeBytes, locked = false,
-                        onDownload = if (canDownload && item.downloadPath != null) ({ saving = folder to i }) else null) {
-                        onEvent(Event.Play(folder, i))
+                        onDownload = if (canDownload && item.downloadPath != null) ({ saving = folder to i }) else null,
+                        thumbnail = open.urlOf(folder, item).takeIf { item.mimeType.startsWith("image/") }, other = item.isOtherFile()) {
+                        when {
+                            item.mimeType.startsWith("image/") -> photoView = folder.items.filter { it.mimeType.startsWith("image/") }
+                                .let { imgs -> imgs.map { PhotoRef(open.urlOf(folder, it), it.name) } to imgs.indexOf(item) }
+                            item.isOtherFile() -> if (canDownload && item.downloadPath != null) saving = folder to i
+                            else -> onEvent(Event.Play(folder, i))
+                        }
                     }
                 }
                 item { Spacer(Modifier.navigationBarsPadding().height(24.dp)) }
+            }
+            group != null && group.kind == KIND_IMAGE && open.loose(group).all { open.openable(it) != null } -> {
+                val pairs = open.loose(group).mapNotNull { open.openable(it) }.flatMap { s2 -> s2.items.map { s2 to it } }
+                RemotePhotoGrid(pairs, open) { i -> photoView = pairs.map { (sh, it) -> PhotoRef(open.urlOf(sh, it), it.name) } to i }
             }
             group != null -> LazyColumn(Modifier.fillMaxSize()) {
                 // Each file on its own row; a protected one shows a lock and asks its own PIN when tapped.
                 open.loose(group).forEach { share ->
                     val ready = open.openable(share)
                     if (ready == null) item(key = share.id) {
-                        FileRow(share.title, group.audio, 0, null, locked = true) { onEvent(Event.OpenShare(share)) }
+                        FileRow(share.title, group.audio, 0, null, locked = true, other = group.kind == KIND_FILE) { onEvent(Event.OpenShare(share)) }
                     } else itemsIndexed(ready.items, key = { _, it -> share.id + "/" + it.id }) { i, item ->
                         FileRow(item.name, item.isAudio, item.durationMs, item.sizeBytes, locked = false,
-                            onDownload = if (canDownload && item.downloadPath != null) ({ saving = ready to i }) else null) { onEvent(Event.PlayInGroup(group, ready, i)) }
+                            onDownload = if (canDownload && item.downloadPath != null) ({ saving = ready to i }) else null,
+                            thumbnail = open.urlOf(ready, item).takeIf { item.mimeType.startsWith("image/") }, other = item.isOtherFile()) {
+                            when {
+                                item.mimeType.startsWith("image/") -> photoView = listOf(PhotoRef(open.urlOf(ready, item), item.name)) to 0
+                                item.isOtherFile() -> if (canDownload && item.downloadPath != null) saving = ready to i
+                                else -> onEvent(Event.PlayInGroup(group, ready, i))
+                            }
+                        }
                     }
                 }
                 item { Spacer(Modifier.navigationBarsPadding().height(24.dp)) }
@@ -463,6 +501,7 @@ private fun DeviceContent(state: LocalNetworkContract.State, open: LocalNetworkC
         }
         DownloadsPanel(state.downloads, onEvent)
     }
+    photoView?.let { (photos, start) -> PhotoViewer(photos, start, onClose = { photoView = null }) }
 }
 
 /** One of the folders gathering files shared on their own; a lock at the end when its files are protected. */
@@ -474,7 +513,7 @@ private fun GroupRow(group: LocalNetworkContract.Group, count: Int, onClick: () 
         Column(Modifier.weight(1f)) {
             Text(group.title, fontSize = 15.sp, lineHeight = 18.sp, color = MaterialTheme.colorScheme.primary, maxLines = 1)
             Spacer(Modifier.height(2.dp))
-            Text(countLabel(count, group.audio), fontSize = 12.sp, lineHeight = 15.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(countLabel(count, group.kind), fontSize = 12.sp, lineHeight = 15.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         if (group.protected) LockMark()
     }
@@ -493,7 +532,7 @@ private fun ShareRow(share: RemoteShare, open: LocalNetworkContract.OpenDevice, 
                 Text(share.title.replaceFirstChar { it.uppercaseChar() }, fontSize = 15.sp, lineHeight = 18.sp, color = MaterialTheme.colorScheme.primary,
                     maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Spacer(Modifier.height(2.dp))
-                Text(countLabel(share.itemCount, ready?.items?.all { it.isAudio } == true), fontSize = 12.sp, lineHeight = 15.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(countLabel(share.itemCount, if (share.audio) KIND_AUDIO else share.kind), fontSize = 12.sp, lineHeight = 15.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             if (locked) LockMark()
         }
@@ -508,11 +547,16 @@ private fun FileRow(
     name: String, isAudio: Boolean, durationMs: Long, sizeBytes: Long?, locked: Boolean,
     /** Set when the owner allows saving this file. */
     onDownload: (() -> Unit)? = null,
+    /** Image URL shown instead of the icon (photos). */
+    thumbnail: String? = null,
+    /** A document or other file, drawn with a file icon. */
+    other: Boolean = false,
     onClick: () -> Unit,
 ) {
     Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(width = 120.dp, height = 68.dp).background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(6.dp)), contentAlignment = Alignment.Center) {
-            Icon(if (isAudio) Icons.Default.MusicNote else Icons.Default.Movie, null, Modifier.size(28.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (thumbnail != null) AsyncImage(thumbnail, null, Modifier.fillMaxSize().clip(RoundedCornerShape(6.dp)), contentScale = ContentScale.Crop)
+            else Icon(if (isAudio) Icons.Default.MusicNote else if (other) Icons.AutoMirrored.Filled.InsertDriveFile else Icons.Default.Movie, null, Modifier.size(28.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
             if (durationMs > 0) Text(formatDuration(durationMs), Modifier.align(Alignment.BottomEnd).padding(4.dp)
                 .background(Color.Black.copy(alpha = 0.7f), RoundedCornerShape(3.dp)).padding(horizontal = 4.dp, vertical = 1.dp),
                 color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Medium)
@@ -532,7 +576,34 @@ private fun LockMark() {
     Icon(Icons.Default.Lock, "Protected", Modifier.padding(start = 8.dp).size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
 }
 
-private fun countLabel(n: Int, audio: Boolean): String = if (audio) "$n ${if (n == 1) "song" else "songs"}" else "$n ${if (n == 1) "video" else "videos"}"
+private fun countLabel(n: Int, audio: Boolean): String = countLabel(n, if (audio) KIND_AUDIO else KIND_VIDEO)
+
+private fun countLabel(n: Int, kind: String): String {
+    val (one, many) = when (kind) {
+        KIND_AUDIO -> "song" to "songs"
+        KIND_IMAGE -> "photo" to "photos"
+        KIND_FILE -> "file" to "files"
+        else -> "video" to "videos"
+    }
+    return "$n ${if (n == 1) one else many}"
+}
+
+/** Not something the player or photo viewer opens (document, archive, …): it can only be downloaded. */
+private fun RemoteItem.isOtherFile() = !isAudio && !mimeType.startsWith("video/") && !mimeType.startsWith("image/") && mimeType.isNotEmpty() && mimeType != "video/*"
+
+/** A grid of photos from another device, loaded with this device's tokens; tapping one opens it full screen. */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun RemotePhotoGrid(items: List<Pair<RemoteShare, RemoteItem>>, open: LocalNetworkContract.OpenDevice, onOpen: (Int) -> Unit) {
+    LazyVerticalGrid(GridCells.Adaptive(108.dp), Modifier.fillMaxSize(), contentPadding = PaddingValues(2.dp),
+        horizontalArrangement = Arrangement.spacedBy(2.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        items(items.size, key = { items[it].first.id + "/" + items[it].second.id }) { i ->
+            val (share, item) = items[i]
+            AsyncImage(open.urlOf(share, item), item.name, Modifier.aspectRatio(1f).background(MaterialTheme.colorScheme.surfaceVariant).clickable { onOpen(i) },
+                contentScale = ContentScale.Crop)
+        }
+    }
+}
 
 /** Downloads in progress and just finished, as a card at the bottom: status badge, name, progress or where it was saved. */
 @Composable
