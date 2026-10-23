@@ -33,6 +33,8 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.Button
+import androidx.compose.material3.PrimaryTabRow
+import androidx.compose.material3.Tab
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -53,6 +55,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -75,30 +78,41 @@ fun LocalNetworkScreen(onBack: () -> Unit, viewModel: LocalNetworkViewModel = ko
 
 @Composable
 fun LocalNetworkContent(state: LocalNetworkContract.State, onBack: () -> Unit, onEvent: (Event) -> Unit) {
-    val browsing = state.browsing
-    if (browsing != null) {
-        DeviceSharesContent(browsing, onEvent)
-        return
-    }
     var adding by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        TopBar("Network share", onBack = onBack, actions = {
+        TopBar("Network", onBack = onBack, actions = {
+            IconButton({ onEvent(Event.Refresh) }) { Icon(Icons.Default.Refresh, "Refresh") }
             IconButton({ adding = true }) { Icon(Icons.Default.Add, "Add device by address") }
         })
+        val tabs = if (state.canHost) LocalNetworkContract.Tab.entries else listOf(LocalNetworkContract.Tab.SharedWithMe)
+        if (tabs.size > 1) {
+            PrimaryTabRow(tabs.indexOf(state.tab).coerceAtLeast(0), containerColor = MaterialTheme.colorScheme.background) {
+                tabs.forEach { tab ->
+                    val count = when (tab) {
+                        LocalNetworkContract.Tab.SharedWithMe -> state.devices.sumOf { it.shares.size }
+                        LocalNetworkContract.Tab.SharedByMe -> state.shares.count { shareStatus(it, state.nowMs).open }
+                    }
+                    Tab(state.tab == tab, { onEvent(Event.SelectTab(tab)) }, text = {
+                        Text(if (count > 0) "${tab.label} ($count)" else tab.label, fontWeight = FontWeight.Medium)
+                    })
+                }
+            }
+        }
         LazyColumn(Modifier.fillMaxWidth().weight(1f)) {
-            if (state.canHost) hostSection(state, onEvent)
-            nearbySection(state, onEvent, onAdd = { adding = true })
+            when (if (state.canHost) state.tab else LocalNetworkContract.Tab.SharedWithMe) {
+                LocalNetworkContract.Tab.SharedWithMe -> sharedWithMe(state, onEvent, onAdd = { adding = true })
+                LocalNetworkContract.Tab.SharedByMe -> sharedByMe(state, onEvent)
+            }
             item { Spacer(Modifier.navigationBarsPadding().height(24.dp)) }
         }
     }
     if (adding) AddAddressDialog(onDismiss = { adding = false }, onAdd = { adding = false; onEvent(Event.AddAddress(it)) })
 }
 
-private fun LazyListScope.hostSection(state: LocalNetworkContract.State, onEvent: (Event) -> Unit) {
-    item { SectionTitle("This device") }
+private fun LazyListScope.sharedByMe(state: LocalNetworkContract.State, onEvent: (Event) -> Unit) {
     item {
         val host = state.host
-        Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
+        Column(Modifier.fillMaxWidth().padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text("Share on this network", fontSize = 16.sp, fontWeight = FontWeight.Medium)
@@ -107,7 +121,7 @@ private fun LazyListScope.hostSection(state: LocalNetworkContract.State, onEvent
                             is HostState.Running -> "On · others on this Wi-Fi can open your shares"
                             HostState.Starting -> "Starting…"
                             is HostState.Failed -> host.reason
-                            HostState.Stopped -> "Off"
+                            HostState.Stopped -> "Off · your shares are hidden"
                         },
                         fontSize = 13.sp,
                         color = if (host is HostState.Failed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
@@ -116,7 +130,7 @@ private fun LazyListScope.hostSection(state: LocalNetworkContract.State, onEvent
                 Switch(host is HostState.Running || host == HostState.Starting, { on -> onEvent(if (on) Event.StartHosting else Event.StopHosting) })
             }
             if (host is HostState.Running && host.addresses.isNotEmpty()) {
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(10.dp))
                 Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(10.dp)).padding(12.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.Language, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -130,104 +144,95 @@ private fun LazyListScope.hostSection(state: LocalNetworkContract.State, onEvent
             }
         }
     }
-    item { SectionTitle("My shares", top = 20.dp) }
     if (state.shares.isEmpty()) {
-        item { Hint("Select videos or songs in your library and choose \"Share on network\".") }
+        item { Hint("Nothing shared yet. In your library, tap ⋮ on a video or song and choose \"Share on network\".") }
     }
-    items(state.shares, key = { "share-" + it.id }) { MyShareRow(it, state.nowMs, onEvent) }
+    items(state.shares, key = { "share-" + it.id }) { MyShareCard(it, state.nowMs, onEvent) }
 }
 
 @Composable
-private fun MyShareRow(share: Share, nowMs: Long, onEvent: (Event) -> Unit) {
+private fun MyShareCard(share: Share, nowMs: Long, onEvent: (Event) -> Unit) {
     val status = shareStatus(share, nowMs)
-    Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
-            Text(share.title, fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            val access = if (share.access == ShareAccess.Public) "Public" else "Code ${share.code}"
-            Text("${share.items.size} ${if (share.items.size == 1) "file" else "files"} · $access", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(status.label, fontSize = 12.sp, color = if (status.open) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error)
-        }
-        if (status.open) TextButton({ onEvent(Event.RevokeShare(share.id)) }) { Text("Stop") }
-        IconButton({ onEvent(Event.DeleteShare(share.id)) }) { Icon(Icons.Default.Close, "Remove") }
-    }
-}
-
-private fun LazyListScope.nearbySection(state: LocalNetworkContract.State, onEvent: (Event) -> Unit, onAdd: () -> Unit) {
-    item { SectionTitle("Nearby devices", top = 20.dp) }
-    if (state.canDiscover && state.nearby.isEmpty()) {
-        item {
-            Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-                Spacer(Modifier.width(12.dp))
-                Text("Looking for Max Player on this Wi-Fi…", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-        }
-    }
-    if (!state.canDiscover) {
-        item { Hint("This browser can't search the network. Add a device by the address shown on it.") }
-    }
-    items(state.nearby, key = { "near-" + it.id }) { d ->
-        DeviceRow(platformIcon(d.platform), d.name, d.baseUrl.substringAfter("://"), onClick = { onEvent(Event.OpenDevice(d.name, d.baseUrl)) })
-    }
-    val saved = state.savedAddresses.filter { url -> state.nearby.none { it.baseUrl == url } }
-    items(saved, key = { "saved-$it" }) { url ->
-        DeviceRow(Icons.Default.Wifi, url.substringAfter("://"), "Added by address", onClick = { onEvent(Event.OpenDevice(url.substringAfter("://"), url)) }) {
-            IconButton({ onEvent(Event.RemoveAddress(url)) }) { Icon(Icons.Default.Close, "Forget") }
-        }
-    }
-    item { TextButton(onAdd, Modifier.padding(horizontal = 8.dp)) { Text("Add device by address") } }
-}
-
-@Composable
-private fun DeviceRow(icon: ImageVector, title: String, subtitle: String, onClick: () -> Unit, trailing: @Composable () -> Unit = {}) {
-    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(40.dp).background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(10.dp)), contentAlignment = Alignment.Center) {
-            Icon(icon, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        Spacer(Modifier.width(14.dp))
-        Column(Modifier.weight(1f)) {
-            Text(title, fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(subtitle, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
-        trailing()
-    }
-}
-
-@Composable
-private fun DeviceSharesContent(b: LocalNetworkContract.Browsing, onEvent: (Event) -> Unit) {
-    Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
-        Row(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            IconButton({ onEvent(Event.CloseDevice) }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") }
+    var expanded by remember(share.id) { mutableStateOf(false) }
+    Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp).background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(12.dp))) {
+        Row(Modifier.fillMaxWidth().clickable { expanded = !expanded }.padding(start = 14.dp, top = 10.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text(b.name, fontSize = 18.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(b.baseUrl.substringAfter("://"), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(share.title, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                val access = if (share.access == ShareAccess.Public) "Anyone on network" else "Code ${share.code}"
+                Text("${share.items.size} ${if (share.items.size == 1) "file" else "files"} · $access", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(status.label, fontSize = 12.sp, color = if (status.open) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error)
             }
-            IconButton({ onEvent(Event.RefreshDevice) }) { Icon(Icons.Default.Refresh, "Refresh") }
+            if (status.open) TextButton({ onEvent(Event.RevokeShare(share.id)) }) { Text("Stop") }
+            IconButton({ onEvent(Event.DeleteShare(share.id)) }) { Icon(Icons.Default.Close, "Remove") }
         }
-        HorizontalDivider()
-        when {
-            b.loading && b.shares.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
-            b.error != null -> Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(b.error.orEmpty(), color = MaterialTheme.colorScheme.error)
-                    Spacer(Modifier.height(12.dp))
-                    Button({ onEvent(Event.RefreshDevice) }) { Text("Try again") }
-                }
-            }
-            b.shares.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("Nothing is shared on this device right now.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            }
-            else -> LazyColumn(Modifier.fillMaxSize()) {
-                items(b.shares, key = { it.id }) { share -> RemoteShareCard(share, b, onEvent) }
-                item { Spacer(Modifier.navigationBarsPadding().height(24.dp)) }
+        if (expanded) share.items.forEach { item ->
+            HorizontalDivider(color = MaterialTheme.colorScheme.background)
+            Row(Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(if (item.isAudio) Icons.Default.MusicNote else Icons.Default.PlayArrow, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.width(10.dp))
+                Text(item.name, Modifier.weight(1f), fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(formatSize(item.sizeBytes), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
 }
 
+private fun LazyListScope.sharedWithMe(state: LocalNetworkContract.State, onEvent: (Event) -> Unit, onAdd: () -> Unit) {
+    if (state.devices.isEmpty()) {
+        item {
+            Column(Modifier.fillMaxWidth().padding(top = 48.dp, start = 24.dp, end = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                if (state.canDiscover) {
+                    CircularProgressIndicator(Modifier.size(28.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.height(16.dp))
+                    Text("Looking for Max Player on this Wi-Fi…", fontSize = 15.sp)
+                    Spacer(Modifier.height(6.dp))
+                    Text("Files others share with you show up here. Ask them to turn on sharing.", fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+                } else {
+                    Text("This browser can't search the network. Add a device by the address shown on it.", fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+                }
+                Spacer(Modifier.height(12.dp))
+                TextButton(onAdd) { Text("Add device by address") }
+            }
+        }
+        return
+    }
+    state.devices.forEach { device ->
+        item(key = "dev-" + device.baseUrl) { DeviceHeader(device, onEvent) }
+        when {
+            device.loading && device.shares.isEmpty() -> item(key = "load-" + device.baseUrl) {
+                Row(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) { CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp) }
+            }
+            device.error != null && device.shares.isEmpty() -> item(key = "err-" + device.baseUrl) {
+                Text(device.error.orEmpty(), Modifier.padding(horizontal = 20.dp, vertical = 4.dp), fontSize = 13.sp, color = MaterialTheme.colorScheme.error)
+            }
+            device.shares.isEmpty() -> item(key = "none-" + device.baseUrl) { Hint("Nothing shared right now.") }
+            else -> items(device.shares, key = { device.baseUrl + "/" + it.id }) { RemoteShareCard(it, device, onEvent) }
+        }
+    }
+    item { TextButton(onAdd, Modifier.padding(horizontal = 8.dp, vertical = 8.dp)) { Text("Add device by address") } }
+}
+
 @Composable
-private fun RemoteShareCard(share: RemoteShare, b: LocalNetworkContract.Browsing, onEvent: (Event) -> Unit) {
-    val open = b.unlocked[share.id]?.share ?: share.takeIf { !it.locked }
+private fun DeviceHeader(device: LocalNetworkContract.RemoteDevice, onEvent: (Event) -> Unit) {
+    Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 4.dp, top = 16.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(36.dp).background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(10.dp)), contentAlignment = Alignment.Center) {
+            Icon(platformIcon(device.platform), null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(device.name, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(device.baseUrl.substringAfter("://") + if (device.discovered) "" else " · added by address", fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        if (!device.discovered) IconButton({ onEvent(Event.RemoveAddress(device.baseUrl)) }) { Icon(Icons.Default.Close, "Forget device") }
+    }
+}
+
+@Composable
+private fun RemoteShareCard(share: RemoteShare, device: LocalNetworkContract.RemoteDevice, onEvent: (Event) -> Unit) {
+    val open = device.unlocked[share.id]?.share ?: share.takeIf { !it.locked }
     Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp).background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(12.dp))) {
         Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
             if (share.locked) { Icon(Icons.Default.Lock, null, Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)) }
@@ -242,13 +247,13 @@ private fun RemoteShareCard(share: RemoteShare, b: LocalNetworkContract.Browsing
                     placeholder = { Text("Enter code") }, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
                 )
                 Spacer(Modifier.width(10.dp))
-                Button({ onEvent(Event.Unlock(share, code)) }, enabled = code.isNotEmpty()) { Text("Unlock") }
+                Button({ onEvent(Event.Unlock(device.baseUrl, share, code)) }, enabled = code.isNotEmpty()) { Text("Unlock") }
             }
-            b.unlockError[share.id]?.let { Text(it, Modifier.padding(start = 14.dp, bottom = 12.dp), color = MaterialTheme.colorScheme.error, fontSize = 13.sp) }
+            device.unlockError[share.id]?.let { Text(it, Modifier.padding(start = 14.dp, bottom = 12.dp), color = MaterialTheme.colorScheme.error, fontSize = 13.sp) }
         } else {
             open.items.forEachIndexed { i, item ->
                 HorizontalDivider(color = MaterialTheme.colorScheme.background)
-                Row(Modifier.fillMaxWidth().clickable { onEvent(Event.Play(open, i)) }.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxWidth().clickable { onEvent(Event.Play(device.baseUrl, open, i)) }.padding(horizontal = 14.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(if (item.isAudio) Icons.Default.MusicNote else Icons.Default.PlayArrow, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.primary)
                     Spacer(Modifier.width(10.dp))
                     Text(item.name, Modifier.weight(1f), fontSize = 14.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)

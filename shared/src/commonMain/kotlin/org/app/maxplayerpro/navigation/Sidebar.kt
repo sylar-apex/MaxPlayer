@@ -67,7 +67,7 @@ private val library = listOf(
 )
 
 private val more = listOf(
-    SidebarItem("Network share", Icons.Outlined.SettingsInputAntenna, Routes.LocalNetwork, listOf(Routes.LocalNetwork::class)),
+    SidebarItem("Network", Icons.Outlined.SettingsInputAntenna, Routes.LocalNetwork, listOf(Routes.LocalNetwork::class)),
     SidebarItem("Storage", Icons.Outlined.Storage, Routes.MediaManager, listOf(Routes.MediaManager::class, Routes.MediaList::class)),
     SidebarItem("Theme", Icons.Outlined.Palette, Routes.Theme, listOf(Routes.Theme::class)),
 )

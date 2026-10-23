@@ -44,6 +44,7 @@ import org.app.maxplayerpro.appres.resources.Res
 import org.app.maxplayerpro.appres.resources.ic_chip_music
 import org.app.maxplayerpro.appres.resources.ic_chip_playlist
 import org.app.maxplayerpro.appres.resources.ic_chip_privacy
+import org.app.maxplayerpro.appres.resources.ic_local_network
 import org.app.maxplayerpro.home.ui.HomeNavigation
 import org.app.maxplayerpro.sharedlogic.model.ListField
 import org.app.maxplayerpro.sharedlogic.model.ListLayout
@@ -58,6 +59,7 @@ internal fun ShortcutChips(navigation: HomeNavigation, modifier: Modifier = Modi
         Chip(Res.drawable.ic_chip_music, "Music", navigation.onMusic)
         Chip(Res.drawable.ic_chip_privacy, "Privacy", navigation.onPrivacy)
         Chip(Res.drawable.ic_chip_playlist, "Video Playlist", navigation.onPlaylists)
+        Chip(Res.drawable.ic_local_network, "Network", navigation.onNetwork)
     }
 }
 

@@ -62,6 +62,7 @@ class HomeNavigation(
     val onPrivacy: () -> Unit,
     val onFileTransfer: () -> Unit,
     val onPlaylists: () -> Unit,
+    val onNetwork: () -> Unit,
 )
 
 @Composable

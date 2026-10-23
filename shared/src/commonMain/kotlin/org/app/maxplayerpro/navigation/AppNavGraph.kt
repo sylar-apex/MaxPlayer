@@ -42,6 +42,7 @@ fun NavGraphBuilder.appNavGraph(navController: NavController) {
                 onPrivacy = { navController.push(Routes.PrivateFolder) },
                 onFileTransfer = { navController.push(Routes.Unavailable("File Transfer", FILE_TRANSFER_REASON)) },
                 onPlaylists = { navController.push(Routes.Playlists) },
+                onNetwork = { navController.push(Routes.LocalNetwork) },
             ),
         )
     }
