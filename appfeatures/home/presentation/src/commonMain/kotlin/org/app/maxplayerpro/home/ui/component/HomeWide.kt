@@ -116,7 +116,7 @@ internal fun HomeWide(
             FolderCard(
                 folder, onClick = { picker.tap(folder) { navigation.onFolder(it.path) } }, showPath = opts.viewMode == ViewMode.AllFolders,
                 showThumbnail = opts.folderThumbnails, hasNew = folder.path in state.newFolders,
-                onLongClick = { picker.toggle(folder) }, onMore = { picker.menuFor = folder },
+                onLongClick = { picker.toggle(folder) }, menu = { dismiss -> FolderMenuItems(folder, dismiss) },
                 selected = if (picker.selecting) folder.path in picker.selected else null,
                 onMakePrivate = { shareActions.makeFolderPrivate(folder.path) }.takeIf { folder.path in shareMarks.value.folders },
             )

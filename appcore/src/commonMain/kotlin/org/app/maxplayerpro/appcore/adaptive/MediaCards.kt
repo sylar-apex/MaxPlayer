@@ -1,5 +1,7 @@
 package org.app.maxplayerpro.appcore.adaptive
 
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.material3.DropdownMenu
 import androidx.compose.material.icons.outlined.Circle
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.foundation.combinedClickable
@@ -178,7 +180,10 @@ fun FolderCard(
     selected: Boolean? = null,
     /** Set while the folder is shared on the network: its mark makes it private. */
     onMakePrivate: (() -> Unit)? = null,
+    /** When set, the ⋮ opens this menu right at the button (desktop) instead of calling [onMore]. */
+    menu: (@Composable ColumnScope.(dismiss: () -> Unit) -> Unit)? = null,
 ) {
+    var menuOpen by remember { mutableStateOf(false) }
     val (source, hovered) = rememberHover()
     val cover = remember(folder.path, showThumbnail) { if (showThumbnail) folder.files.firstOrNull { !it.isAudio } else null }
     Column(modifier.hoverable(source).combinedClickable(interactionSource = source, indication = null, onClick = onClick, onLongClick = onLongClick)) {
@@ -204,7 +209,10 @@ fun FolderCard(
                 color = if (hovered) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground,
             )
             if (selected == null) onMakePrivate?.let { SharedMark(it) }
-            if (onMore != null && selected == null) IconButton(onMore, Modifier.size(28.dp)) { Icon(Icons.Outlined.MoreVert, "Folder actions", Modifier.size(18.dp)) }
+            if ((onMore != null || menu != null) && selected == null) Box {
+                IconButton({ if (menu != null) menuOpen = true else onMore?.invoke() }, Modifier.size(28.dp)) { Icon(Icons.Outlined.MoreVert, "Folder actions", Modifier.size(18.dp)) }
+                if (menu != null) DropdownMenu(menuOpen, { menuOpen = false }) { menu { menuOpen = false } }
+            }
         }
         Text(
             if (showPath) folder.path else formatSize(folder.sizeBytes), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant,

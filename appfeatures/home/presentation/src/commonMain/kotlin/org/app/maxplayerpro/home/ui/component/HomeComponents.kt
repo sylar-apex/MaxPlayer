@@ -1,5 +1,8 @@
 package org.app.maxplayerpro.home.ui.component
 
+import org.app.maxplayerpro.appcore.adaptive.LocalWindowClass
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.DropdownMenu
 import org.app.maxplayerpro.sharedlogic.usecase.ShareTarget
 import org.app.kmediaplayer.ui.common.PlayerDialog
 import androidx.compose.material3.TextButton
@@ -200,6 +203,7 @@ internal fun FolderList(
 ) {
     val picker = rememberFolderPicker()
     val (shareMarks, shareActions) = rememberShareMarks()
+    val wide = LocalWindowClass.current.isWide
     Column(Modifier.fillMaxSize()) {
         Box(Modifier.weight(1f)) {
             if (opts.layout == ListLayout.Grid) {
@@ -213,8 +217,12 @@ internal fun FolderList(
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(f.name, Modifier.weight(1f, fill = false), maxLines = 1, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.primary)
                                 if (!picker.selecting && f.path in shareMarks.value.folders) SharedMark({ shareActions.makeFolderPrivate(f.path) }, size = 16.dp)
-                                if (!picker.selecting) IconButton({ picker.menuFor = f }, Modifier.size(24.dp)) {
-                                    Icon(Icons.Default.MoreVert, "Folder actions", Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                if (!picker.selecting) Box {
+                                    var open by remember { mutableStateOf(false) }
+                                    IconButton({ if (wide) open = true else picker.menuFor = f }, Modifier.size(24.dp)) {
+                                        Icon(Icons.Default.MoreVert, "Folder actions", Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    }
+                                    DropdownMenu(open, { open = false }) { FolderMenuItems(f) { open = false } }
                                 }
                             }
                             Text("${f.files.size} ${if (f.files.size == 1) "video" else "videos"}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -246,7 +254,12 @@ internal fun FolderList(
                                 if (showPath || ListField.Path in opts.fields) Text(f.path, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
                             if (!picker.selecting && f.path in shareMarks.value.folders) SharedMark({ shareActions.makeFolderPrivate(f.path) })
-                            if (!picker.selecting) IconButton({ picker.menuFor = f }) { Icon(Icons.Default.MoreVert, "Folder actions", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
+                            if (!picker.selecting) Box {
+                                var open by remember { mutableStateOf(false) }
+                                IconButton({ if (wide) open = true else picker.menuFor = f }) { Icon(Icons.Default.MoreVert, "Folder actions", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
+                                // Desktop: a menu at the button; phones keep the bottom sheet.
+                                DropdownMenu(open, { open = false }) { FolderMenuItems(f) { open = false } }
+                            }
                             else Spacer(Modifier.width(12.dp))
                         }
                     }
@@ -255,6 +268,16 @@ internal fun FolderList(
         }
         FolderPickerUi(picker, folders, onDelete)
     }
+}
+
+/** A folder's actions as menu items, for the desktop dropdown at its ⋮. */
+@Composable
+internal fun FolderMenuItems(folder: MediaFolder, dismiss: () -> Unit) {
+    DropdownMenuItem(
+        text = { Text("Share on network") },
+        leadingIcon = { Icon(Icons.Default.Sensors, null) },
+        onClick = { dismiss(); NetworkShareRequests.request(folder.files, folder.path) },
+    )
 }
 
 /** The pick circle shown on each folder while picking. */
