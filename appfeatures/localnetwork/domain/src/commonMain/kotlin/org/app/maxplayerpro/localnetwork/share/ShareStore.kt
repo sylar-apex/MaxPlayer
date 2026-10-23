@@ -96,6 +96,14 @@ class ShareStore(private val store: KeyValueStore) {
 
     suspend fun revoke(id: String) = mutate { list -> list.map { if (it.id == id) it.copy(revoked = true) else it } }
 
+    /** Stops sharing the file [uri] wherever it is shared; a share left with no files goes away. */
+    suspend fun removeFile(uri: String) = mutate { list ->
+        list.mapNotNull { share ->
+            if (share.items.none { it.uri == uri }) share
+            else share.copy(items = share.items.filterNot { it.uri == uri }).takeIf { it.items.isNotEmpty() }
+        }
+    }
+
     /** Makes the share private again. */
     suspend fun delete(id: String) = mutate { list -> list.filterNot { it.id == id } }
 

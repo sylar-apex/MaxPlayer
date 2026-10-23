@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import org.app.maxplayerpro.appcore.adaptive.CardGrid
 import org.app.maxplayerpro.appcore.adaptive.ContinueWatchingCard
 import org.app.maxplayerpro.appcore.adaptive.FolderCard
+import org.app.maxplayerpro.appcore.component.rememberShareMarks
 import org.app.maxplayerpro.appcore.adaptive.SectionTitle
 import org.app.maxplayerpro.appcore.adaptive.WideHeader
 import org.app.maxplayerpro.appcore.adaptive.LocalTitleBarHost
@@ -96,6 +97,7 @@ internal fun HomeWide(
         return
     }
     val picker = rememberFolderPicker()
+    val (shareMarks, shareActions) = rememberShareMarks()
     Column(Modifier.fillMaxSize()) {
     LazyVerticalGrid(
         GridCells.Adaptive(CardGrid.minCardWidth), Modifier.fillMaxWidth().weight(1f),
@@ -116,6 +118,7 @@ internal fun HomeWide(
                 showThumbnail = opts.folderThumbnails, hasNew = folder.path in state.newFolders,
                 onLongClick = { picker.toggle(folder) }, onMore = { picker.menuFor = folder },
                 selected = if (picker.selecting) folder.path in picker.selected else null,
+                onMakePrivate = { shareActions.makeFolderPrivate(folder.path) }.takeIf { folder.path in shareMarks.value.folders },
             )
         }
     }

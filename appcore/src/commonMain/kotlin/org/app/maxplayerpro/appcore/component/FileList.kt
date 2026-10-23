@@ -147,6 +147,7 @@ fun FileList(
         }
         // Wide windows show artwork cards for the Grid layout; List keeps the classic rows.
         val wide = LocalWindowClass.current.isWide && opts.layout == ListLayout.Grid
+        val (shareMarks, shareActions) = rememberShareMarks()
         if (!wide || files.isEmpty()) header?.invoke()
         if (files.isEmpty()) EmptyState(emptyTitle, Modifier.weight(1f))
         else if (wide) {
@@ -168,6 +169,7 @@ fun FileList(
                         highlighted = f.uri in selected || (state.markLastPlayed && f.uri == lastPlayed),
                         options = opts, lastPlayedMs = record?.lastPlayedMs ?: 0,
                         onMore = { actionsFor = f },
+                        onMakePrivate = { shareActions.makeFilePrivate(f.uri) }.takeIf { f.uri in shareMarks.value.files && !selecting },
                     )
                 }
             }
@@ -185,6 +187,7 @@ fun FileList(
                     onThumbClick = { if (selecting || state.selectThumbnail) toggle(f) else send(Event.Play(files, files.indexOf(f))) },
                     onLongClick = { toggle(f) },
                     onMore = { actionsFor = f },
+                    onMakePrivate = { shareActions.makeFilePrivate(f.uri) }.takeIf { f.uri in shareMarks.value.files && !selecting },
                 )
             }
             if (opts.layout == ListLayout.Grid) {
@@ -240,6 +243,8 @@ fun FileList(
 private fun FileRow(
     f: MediaFile, opts: ListViewOptions, highlight: Boolean, tags: List<String>, record: PlaybackRecord?,
     selecting: Boolean, isSelected: Boolean, onClick: () -> Unit, onThumbClick: () -> Unit, onLongClick: () -> Unit, onMore: () -> Unit,
+    /** Set while this file is shared on the network: its mark makes it private. */
+    onMakePrivate: (() -> Unit)? = null,
 ) {
     val bg = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.18f) else Color.Transparent
     val titleColor = when {
@@ -263,6 +268,7 @@ private fun FileRow(
             Thumbnail(f, Modifier.fillMaxWidth().aspectRatio(16f / 9f).combinedClickable(onClick = onThumbClick, onLongClick = onLongClick), lengthOnThumb, showImage = opts.videoThumbnails)
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(f.title, Modifier.weight(1f), maxLines = 2, overflow = TextOverflow.Ellipsis, fontSize = 14.sp, color = titleColor)
+                onMakePrivate?.let { SharedMark(it) }
                 if (!selecting) IconButton(onMore, Modifier.size(32.dp)) { Icon(Icons.Default.MoreVert, "More") }
             }
             if (details.isNotEmpty()) Text(details, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
@@ -284,9 +290,10 @@ private fun FileRow(
             Text(f.title, maxLines = 3, overflow = TextOverflow.Ellipsis, fontSize = 13.5.sp, lineHeight = 20.5.sp, color = titleColor, modifier = Modifier.offset(y = (-1).dp))
             if (details.isNotEmpty()) Text(details, fontSize = 11.sp, lineHeight = 15.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2)
             if (ListField.Path in opts.fields) Text(f.folderPath, fontSize = 11.sp, lineHeight = 15.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            if (tags.isNotEmpty()) {
+            if (tags.isNotEmpty() || onMakePrivate != null) {
                 Row(Modifier.padding(top = 7.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
                     tags.forEach { Tag(it, if (it == "NEW") MaxColors.tagNew else MaxColors.tagSubtitle) }
+                    onMakePrivate?.let { SharedMark(it, Modifier.offset(x = (-7).dp, y = (-4).dp)) }
                 }
             }
         }

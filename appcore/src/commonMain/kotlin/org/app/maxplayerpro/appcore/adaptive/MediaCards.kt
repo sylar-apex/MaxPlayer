@@ -62,6 +62,7 @@ import org.app.kmediaplayer.model.MediaFile
 import org.app.kmediaplayer.util.formatDuration
 import org.app.kmediaplayer.util.formatSize
 import org.app.maxplayerpro.appcore.component.ThumbnailLoader
+import org.app.maxplayerpro.appcore.component.SharedMark
 import org.app.maxplayerpro.appcore.theme.MaxColors
 import org.app.kmediaplayer.platform.PlatformMedia
 import org.app.maxplayerpro.sharedlogic.model.ListField
@@ -135,6 +136,8 @@ fun VideoCard(
     options: ListViewOptions = ListViewOptions(),
     lastPlayedMs: Long = 0,
     onMore: (() -> Unit)? = null,
+    /** Set while this file is shared on the network: its mark makes it private. */
+    onMakePrivate: (() -> Unit)? = null,
 ) {
     val (source, hovered) = rememberHover()
     val fields = options.fields
@@ -156,6 +159,7 @@ fun VideoCard(
                 }
                 if (ListField.Path in fields) Text(file.folderPath, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
+            onMakePrivate?.let { SharedMark(it) }
             if (onMore != null) IconButton(onMore, Modifier.size(32.dp)) { Icon(Icons.Outlined.MoreVert, "More", Modifier.size(18.dp)) }
         }
     }
@@ -172,6 +176,8 @@ fun FolderCard(
     onMore: (() -> Unit)? = null,
     /** Null when not picking; otherwise whether this folder is picked. */
     selected: Boolean? = null,
+    /** Set while the folder is shared on the network: its mark makes it private. */
+    onMakePrivate: (() -> Unit)? = null,
 ) {
     val (source, hovered) = rememberHover()
     val cover = remember(folder.path, showThumbnail) { if (showThumbnail) folder.files.firstOrNull { !it.isAudio } else null }
@@ -197,6 +203,7 @@ fun FolderCard(
                 folder.name, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis, fontSize = 15.sp, fontWeight = FontWeight.SemiBold,
                 color = if (hovered) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onBackground,
             )
+            if (selected == null) onMakePrivate?.let { SharedMark(it) }
             if (onMore != null && selected == null) IconButton(onMore, Modifier.size(28.dp)) { Icon(Icons.Outlined.MoreVert, "Folder actions", Modifier.size(18.dp)) }
         }
         Text(

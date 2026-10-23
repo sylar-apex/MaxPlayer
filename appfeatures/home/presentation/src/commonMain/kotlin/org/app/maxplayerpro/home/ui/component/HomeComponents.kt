@@ -61,6 +61,8 @@ import androidx.compose.runtime.setValue
 import org.app.maxplayerpro.sharedlogic.usecase.NetworkShareRequests
 import org.app.kmediaplayer.util.formatSize
 import org.app.maxplayerpro.appcore.component.FolderGlyph
+import org.app.maxplayerpro.appcore.component.SharedMark
+import org.app.maxplayerpro.appcore.component.rememberShareMarks
 import org.app.maxplayerpro.appcore.theme.MaxColors
 import org.app.maxplayerpro.appres.resources.Res
 import org.app.maxplayerpro.appres.resources.ic_chip_music
@@ -197,6 +199,7 @@ internal fun FolderList(
     onOpen: (MediaFolder) -> Unit,
 ) {
     val picker = rememberFolderPicker()
+    val (shareMarks, shareActions) = rememberShareMarks()
     Column(Modifier.fillMaxSize()) {
         Box(Modifier.weight(1f)) {
             if (opts.layout == ListLayout.Grid) {
@@ -209,6 +212,7 @@ internal fun FolderList(
                             }
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Text(f.name, Modifier.weight(1f, fill = false), maxLines = 1, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.primary)
+                                if (!picker.selecting && f.path in shareMarks.value.folders) SharedMark({ shareActions.makeFolderPrivate(f.path) }, size = 16.dp)
                                 if (!picker.selecting) IconButton({ picker.menuFor = f }, Modifier.size(24.dp)) {
                                     Icon(Icons.Default.MoreVert, "Folder actions", Modifier.size(16.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
@@ -241,6 +245,7 @@ internal fun FolderList(
                                 Text(extra, fontSize = 12.sp, lineHeight = 15.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 if (showPath || ListField.Path in opts.fields) Text(f.path, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
                             }
+                            if (!picker.selecting && f.path in shareMarks.value.folders) SharedMark({ shareActions.makeFolderPrivate(f.path) })
                             if (!picker.selecting) IconButton({ picker.menuFor = f }) { Icon(Icons.Default.MoreVert, "Folder actions", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
                             else Spacer(Modifier.width(12.dp))
                         }

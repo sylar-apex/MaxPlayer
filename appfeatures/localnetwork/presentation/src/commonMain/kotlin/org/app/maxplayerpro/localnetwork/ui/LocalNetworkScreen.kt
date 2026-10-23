@@ -1,5 +1,12 @@
 package org.app.maxplayerpro.localnetwork.ui
 
+import org.app.maxplayerpro.appcore.component.SharedGreen
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.filled.SensorsOff
+import androidx.compose.material.icons.filled.Sensors
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -137,19 +144,24 @@ private fun DeviceListContent(state: LocalNetworkContract.State, onBack: () -> U
 private fun LazyListScope.devicesList(state: LocalNetworkContract.State, onEvent: (Event) -> Unit, onAdd: () -> Unit) {
     if (state.devices.isEmpty()) {
         item {
-            Column(Modifier.fillMaxWidth().padding(top = 48.dp, start = 24.dp, end = 24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                if (state.canDiscover) {
-                    CircularProgressIndicator(Modifier.size(28.dp), strokeWidth = 2.dp)
-                    Spacer(Modifier.height(16.dp))
-                    Text("Looking for Max Player on this Wi-Fi…", fontSize = 15.sp)
-                    Spacer(Modifier.height(6.dp))
-                    Text("Devices that turn on sharing show up here.", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
-                } else {
-                    Text("This browser can't search the network. Add a device by the address shown on it.", fontSize = 13.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+            Column(Modifier.fillMaxWidth().padding(top = 72.dp, start = 32.dp, end = 32.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Box(Modifier.size(88.dp).background(MaterialTheme.colorScheme.surfaceVariant, CircleShape), contentAlignment = Alignment.Center) {
+                    Icon(Icons.Default.Sensors, null, Modifier.size(40.dp), tint = MaterialTheme.colorScheme.primary)
                 }
-                Spacer(Modifier.height(12.dp))
-                TextButton(onAdd) { Text("Add device by address") }
+                Spacer(Modifier.height(20.dp))
+                Text(if (state.canDiscover) "Looking for devices…" else "Add a device", fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    if (state.canDiscover) "Max Player on this Wi-Fi with sharing turned on shows up here."
+                    else "This browser can't search the network. Add a device by the address shown on it.",
+                    fontSize = 13.sp, lineHeight = 18.sp, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center,
+                )
+                if (state.canDiscover) {
+                    Spacer(Modifier.height(18.dp))
+                    LinearProgressIndicator(Modifier.width(120.dp).height(3.dp))
+                }
+                Spacer(Modifier.height(24.dp))
+                OutlinedButton(onAdd) { Text("Add device by address") }
             }
         }
         return
@@ -182,48 +194,60 @@ private fun LazyListScope.devicesList(state: LocalNetworkContract.State, onEvent
 
 private fun LazyListScope.sharedByMe(state: LocalNetworkContract.State, onEvent: (Event) -> Unit) {
     item { HostCard(state, onEvent) }
-    item { SectionTitle("Shared folders and files", top = 8.dp) }
+    item { SectionTitle("Shared by you", top = 20.dp) }
     if (state.shares.isEmpty()) {
-        item { Hint("Nothing shared. Everything is private until you share it: in your library tap ⋮ on a folder or file and choose \"Share on network\".") }
+        item { Hint("Nothing shared. Everything is private until you share it: tap ⋮ on a folder or video and choose \"Share on network\".") }
     }
-    items(state.shares, key = { "share-" + it.id }) { MyShareCard(it, state.nowMs, onEvent) }
+    items(state.shares, key = { "share-" + it.id }) { MyShareRow(it, state.nowMs, onEvent) }
 }
 
 @Composable
 private fun HostCard(state: LocalNetworkContract.State, onEvent: (Event) -> Unit) {
     val host = state.host
+    val on = host is HostState.Running || host == HostState.Starting
     var editingPin by remember { mutableStateOf(false) }
     var editingLimit by remember { mutableStateOf(false) }
-    Column(Modifier.fillMaxWidth().padding(16.dp)) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text("Share on this network", fontSize = 16.sp, fontWeight = FontWeight.Medium)
-                Text(
-                    when (host) {
-                        is HostState.Running -> "On · others on this Wi-Fi can see this device"
-                        HostState.Starting -> "Starting…"
-                        is HostState.Failed -> host.reason
-                        HostState.Stopped -> "Off · this device is hidden"
-                    },
-                    fontSize = 13.sp,
-                    color = if (host is HostState.Failed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Switch(host is HostState.Running || host == HostState.Starting, { on -> onEvent(if (on) Event.StartHosting else Event.StopHosting) })
-        }
-        SettingRow("Device PIN", if (state.device.pin != null) "On · others enter it once" else "Off · anyone on this Wi-Fi can open this device") { editingPin = true }
-        SettingRow("Share device for", state.device.untilMs?.let { "Until ${formatDate(it)} · ${timeLeft((it - state.nowMs).coerceAtLeast(0))} left" } ?: "No limit") { editingLimit = true }
-        OutlinedButton({ onEvent(Event.LogOutAllDevices) }, Modifier.padding(top = 8.dp)) { Text("Log out all devices") }
-        if (host is HostState.Running && host.addresses.isNotEmpty()) {
-            Spacer(Modifier.height(12.dp))
-            Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(10.dp)).padding(12.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Language, null, Modifier.size(18.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Open in any browser on this network", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
+        Card {
+            Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(if (on) Icons.Default.Sensors else Icons.Default.SensorsOff, null, Modifier.size(26.dp),
+                    tint = if (host is HostState.Running) SharedGreen else MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.width(14.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("Sharing", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        when (host) {
+                            is HostState.Running -> "On · visible on this Wi-Fi"
+                            HostState.Starting -> "Starting…"
+                            is HostState.Failed -> host.reason
+                            HostState.Stopped -> "Off · this device is hidden"
+                        },
+                        fontSize = 13.sp,
+                        color = if (host is HostState.Failed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
-                SelectionContainer { Column { host.addresses.forEach { Text(it, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 4.dp)) } } }
+                Switch(on, { onEvent(if (it) Event.StartHosting else Event.StopHosting) })
             }
+            if (host is HostState.Running && host.addresses.isNotEmpty()) {
+                HorizontalDivider(color = MaterialTheme.colorScheme.background)
+                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.Language, null, Modifier.size(22.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.width(16.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text("Open in a browser", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        SelectionContainer { Column { host.addresses.forEach { Text(it, fontSize = 15.sp, fontWeight = FontWeight.Medium) } } }
+                    }
+                }
+            }
+        }
+        Spacer(Modifier.height(12.dp))
+        Card {
+            SettingRow(Icons.Default.Lock, "Device PIN", if (state.device.pin != null) "On" else "Off") { editingPin = true }
+            HorizontalDivider(color = MaterialTheme.colorScheme.background)
+            SettingRow(Icons.Default.Timer, "Share device for",
+                state.device.untilMs?.let { "${timeLeft((it - state.nowMs).coerceAtLeast(0))} left" } ?: "No limit") { editingLimit = true }
+            HorizontalDivider(color = MaterialTheme.colorScheme.background)
+            SettingRow(Icons.AutoMirrored.Filled.Logout, "Log out all devices", null) { onEvent(Event.LogOutAllDevices) }
         }
     }
     if (editingPin) DevicePinDialog(state.device.pin != null, onDismiss = { editingPin = false }) { editingPin = false; onEvent(Event.SetDevicePin(it)) }
@@ -231,28 +255,53 @@ private fun HostCard(state: LocalNetworkContract.State, onEvent: (Event) -> Unit
 }
 
 @Composable
-private fun SettingRow(title: String, value: String, onClick: () -> Unit) {
-    Column(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(vertical = 10.dp)) {
-        Text(title, fontSize = 15.sp)
-        Text(value, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-    }
+private fun Card(content: @Composable () -> Unit) {
+    Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(14.dp))) { content() }
 }
 
 @Composable
-private fun MyShareCard(share: Share, nowMs: Long, onEvent: (Event) -> Unit) {
+private fun SettingRow(icon: ImageVector, title: String, value: String?, onClick: () -> Unit) {
+    Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(icon, null, Modifier.size(22.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+        Spacer(Modifier.width(16.dp))
+        Text(title, Modifier.weight(1f), fontSize = 15.sp)
+        value?.let { Text(it, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, null, Modifier.size(20.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+/** One thing this device shares, drawn like a library row: icon, name, mode and time left, and a ⋮ to edit or make it private. */
+@Composable
+private fun MyShareRow(share: Share, nowMs: Long, onEvent: (Event) -> Unit) {
     val status = shareStatus(share, nowMs)
     var editing by remember(share.id) { mutableStateOf(false) }
-    Row(Modifier.fillMaxWidth().clickable { editing = true }.padding(start = 16.dp, end = 4.dp, top = 10.dp, bottom = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-        Icon(if (share.isFolder) Icons.Default.Folder else if (share.items.firstOrNull()?.isAudio == true) Icons.Default.MusicNote else Icons.Default.Movie,
-            null, Modifier.size(28.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-        Spacer(Modifier.width(14.dp))
-        Column(Modifier.weight(1f)) {
-            Text(share.title, fontSize = 15.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            val mode = if (share.access == ShareAccess.Public) "Public" else "Protected · PIN ${share.code}"
-            Text("$mode · ${share.items.size} ${if (share.items.size == 1) "file" else "files"}", fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Text(status.label, fontSize = 12.sp, color = if (status.open) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error)
+    var menu by remember(share.id) { mutableStateOf(false) }
+    Row(Modifier.fillMaxWidth().clickable { editing = true }.padding(start = 16.dp, end = 4.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (share.isFolder || share.items.size > 1) FolderGlyph(Modifier.size(width = 62.dp, height = 46.dp))
+        else Box(Modifier.size(width = 62.dp, height = 46.dp).background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(6.dp)), contentAlignment = Alignment.Center) {
+            Icon(if (share.items.firstOrNull()?.isAudio == true) Icons.Default.MusicNote else Icons.Default.Movie, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        TextButton({ onEvent(Event.MakePrivate(share.id)) }) { Text("Make private") }
+        Spacer(Modifier.width(16.dp))
+        Column(Modifier.weight(1f)) {
+            Text(share.title.replaceFirstChar { it.uppercaseChar() }, fontSize = 15.sp, color = MaterialTheme.colorScheme.primary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Spacer(Modifier.height(2.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (share.access == ShareAccess.Protected) {
+                    Icon(Icons.Default.Lock, null, Modifier.size(13.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(Modifier.width(4.dp))
+                }
+                val mode = if (share.access == ShareAccess.Public) "Public" else "PIN ${share.code}"
+                Text("$mode · ${countLabel(share.items.size, share.items.all { it.isAudio })}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            Text(status.label, fontSize = 12.sp, color = if (status.open) SharedGreen else MaterialTheme.colorScheme.error)
+        }
+        Box {
+            IconButton({ menu = true }) { Icon(Icons.Default.MoreVert, "Share actions", tint = MaterialTheme.colorScheme.onSurfaceVariant) }
+            DropdownMenu(menu, { menu = false }) {
+                DropdownMenuItem({ Text("Edit sharing") }, { menu = false; editing = true })
+                DropdownMenuItem({ Text("Make private") }, { menu = false; onEvent(Event.MakePrivate(share.id)) })
+            }
+        }
     }
     if (editing) {
         // Reopens the share dialog on this share, so its mode, PIN and time can be changed in place.
