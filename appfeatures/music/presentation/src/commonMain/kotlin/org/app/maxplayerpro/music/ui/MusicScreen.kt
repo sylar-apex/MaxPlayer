@@ -1,5 +1,6 @@
 package org.app.maxplayerpro.music.ui
 
+import org.app.maxplayerpro.appcore.component.PullRefresh
 import androidx.compose.foundation.background
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -150,7 +151,8 @@ fun MusicContent(state: MusicContract.State, onBack: () -> Unit, onEvent: (Music
                 }
             }
         }
-        val content = Modifier.weight(1f)
+        PullRefresh(state.scanning, { onEvent(MusicContract.Event.Refresh) }, Modifier.weight(1f)) {
+        val content = Modifier.fillMaxSize()
         if (state.scanning) ScanningState(content, wide, cards = tab != 0 || (grid && wide)) else when (tab) {
             0 -> if (grid && wide) GroupGrid(filtered.mapIndexed { i, f -> GroupItem(f.uri, f.title, f.artist.orUnknown("artist"), f.coverSeed) { play(filtered, i, false) } }, content)
             else Tracks(filtered, state.favourites, content, wide, onAdd = { addTo = it }, onToggleFavourite = favourite) { play(filtered, it, false) }
@@ -177,6 +179,7 @@ fun MusicContent(state: MusicContract.State, onBack: () -> Unit, onEvent: (Music
                     .map { (name, files) -> GroupItem(name, name, summary(files), name) { group = name to files } }
                 GroupGrid(items, content)
             }
+        }
         }
         MiniPlayer(addToPlaylist)
     }

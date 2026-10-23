@@ -1,5 +1,10 @@
 package org.app.maxplayerpro.appcore.component
 
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.rememberCoroutineScope
+import org.app.maxplayerpro.sharedlogic.data.MediaRepository
+import org.koin.compose.koinInject
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import org.app.maxplayerpro.appcore.adaptive.CardGrid
 import org.app.maxplayerpro.appcore.adaptive.LocalWindowClass
@@ -148,6 +153,10 @@ fun FileList(
         // Wide windows show artwork cards for the Grid layout; List keeps the classic rows.
         val wide = LocalWindowClass.current.isWide && opts.layout == ListLayout.Grid
         val (shareMarks, shareActions) = rememberShareMarks()
+        // Pull down rescans the library, as the refresh button does.
+        val media = koinInject<MediaRepository>()
+        val refreshing by media.loading.collectAsState()
+        val scope = rememberCoroutineScope()
         if (!wide || files.isEmpty()) header?.invoke()
         if (files.isEmpty()) EmptyState(emptyTitle, Modifier.weight(1f))
         else if (wide) {
@@ -174,7 +183,7 @@ fun FileList(
                 }
             }
         }
-        else Box(Modifier.weight(1f)) {
+        else PullRefresh(refreshing, { scope.launch { media.refresh() } }, Modifier.weight(1f)) {
             val row: @Composable (MediaFile) -> Unit = { f ->
                 val tags = buildList {
                     if (state.siblingNames.any { it != f.name && it.startsWith(f.title) && it.substringAfterLast('.').lowercase() in subtitleExtensions }) add("SUB")
