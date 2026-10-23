@@ -101,7 +101,9 @@ class LocalNetworkViewModel(
             is Event.OpenDevice -> openDevice(event.baseUrl)
             Event.CloseDevice -> { openJob?.cancel(); updateState { copy(open = null, prompt = null) } }
             is Event.OpenShare -> openShare(event.share)
-            Event.CloseShare -> editOpen { it.copy(openShareId = null) }
+            Event.CloseShare -> editOpen { if (it.openShareId != null) it.copy(openShareId = null) else it.copy(openGroup = null) }
+            is Event.OpenGroup -> editOpen { it.copy(openGroup = event.group) }
+            is Event.PlayInGroup -> playInGroup(event.group, event.share, event.index)
             is Event.SubmitPin -> submitPin(event.pin)
             Event.CancelPin -> updateState { copy(prompt = null, open = if (open?.shares.isNullOrEmpty() && open?.error == null) null else open) }
             is Event.Play -> play(event.share, event.index)
@@ -220,6 +222,19 @@ class LocalNetworkViewModel(
         if (files.isEmpty()) return
         val start = index.coerceIn(files.indices)
         if (files[start].isAudio) operations.playMusic(files, start) else operations.play(files, start)
+    }
+
+    /** Plays the group's open files as one queue, starting at [index] of [share]. */
+    private fun playInGroup(group: LocalNetworkContract.Group, share: RemoteShare, index: Int) {
+        val open = currentState.open ?: return
+        val access = open.id?.let { store.remembered.value[it] }
+        val ready = open.loose(group).mapNotNull { open.openable(it) }
+        val files = ready.flatMap { s -> client.mediaFiles(open.baseUrl, s, access?.deviceToken, access?.shareTokens?.get(s.id)) }
+        if (files.isEmpty()) return
+        // The tapped file's place in the queue: the files of the shares listed before it, plus its index.
+        val start = ready.takeWhile { it.id != share.id }.sumOf { it.items.size } + index
+        val at = start.coerceIn(files.indices)
+        if (group.audio) operations.playMusic(files, at) else operations.play(files, at)
     }
 
     private fun editOpen(change: (OpenDevice) -> OpenDevice) = updateState { copy(open = open?.let(change)) }

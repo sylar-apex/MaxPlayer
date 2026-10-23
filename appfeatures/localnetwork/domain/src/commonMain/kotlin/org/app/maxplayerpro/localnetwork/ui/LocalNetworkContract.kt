@@ -32,6 +32,9 @@ class LocalNetworkContract {
         data class SubmitPin(val pin: String) : Event()
         data object CancelPin : Event()
         data class Play(val share: RemoteShare, val index: Int) : Event()
+        data class OpenGroup(val group: Group) : Event()
+        /** Plays item [index] of [share] within [group]; the group's other open files play next. */
+        data class PlayInGroup(val group: Group, val share: RemoteShare, val index: Int) : Event()
         /** Forgets the PINs entered for the open device and closes it. */
         data object ForgetOpenDevice : Event()
     }
@@ -58,9 +61,22 @@ class LocalNetworkContract {
         val shares: List<RemoteShare> = emptyList(),
         val unlocked: Map<String, RemoteShare> = emptyMap(),
         val openShareId: String? = null,
+        val openGroup: Group? = null,
     ) {
         /** [share] with its items when it can be opened now, else null. */
         fun openable(share: RemoteShare): RemoteShare? = unlocked[share.id] ?: share.takeIf { !it.locked && it.items.isNotEmpty() }
+
+        /** Files shared on their own (not as a folder) that belong in [group]. */
+        fun loose(group: Group): List<RemoteShare> = shares.filter { !it.folder && it.locked == group.protected && it.audio == group.audio }
+    }
+
+    /**
+     * Where files shared on their own appear on the viewing side: one folder per kind, split by protection. A protected
+     * file still has its own PIN; the group only gathers them.
+     */
+    enum class Group(val title: String, val protected: Boolean, val audio: Boolean) {
+        Videos("Videos", false, false), ProtectedVideos("Protected videos", true, false),
+        Music("Music", false, true), ProtectedMusic("Protected music", true, true),
     }
 
     /** A PIN being asked for: the open device's, or [share]'s when set. */

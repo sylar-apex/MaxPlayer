@@ -344,11 +344,13 @@ private fun MyShareRow(share: Share, nowMs: Long, onEvent: (Event) -> Unit) {
 @Composable
 private fun DeviceContent(open: LocalNetworkContract.OpenDevice, refreshing: Boolean, onEvent: (Event) -> Unit) {
     val folder = open.openShareId?.let { id -> open.shares.firstOrNull { it.id == id } }?.let { open.openable(it) }
-    BackHandler { onEvent(if (folder != null) Event.CloseShare else Event.CloseDevice) }
+    val group = open.openGroup
+    val inside = folder != null || group != null
+    BackHandler { onEvent(if (inside) Event.CloseShare else Event.CloseDevice) }
     var menu by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         // TopBar keeps clear of the status bar, like every other screen.
-        TopBar(folder?.title ?: open.name, onBack = { onEvent(if (folder != null) Event.CloseShare else Event.CloseDevice) }) {
+        TopBar(folder?.title ?: group?.title ?: open.name, onBack = { onEvent(if (inside) Event.CloseShare else Event.CloseDevice) }) {
             IconButton({ onEvent(Event.Refresh) }) { Icon(Icons.Default.Refresh, "Refresh") }
             Box {
                 IconButton({ menu = true }) { Icon(Icons.Default.MoreVert, "More") }
@@ -367,6 +369,18 @@ private fun DeviceContent(open: LocalNetworkContract.OpenDevice, refreshing: Boo
                 }
                 item { Spacer(Modifier.navigationBarsPadding().height(24.dp)) }
             }
+            group != null -> LazyColumn(Modifier.fillMaxSize()) {
+                // Each file on its own row; a protected one shows a lock and asks its own PIN when tapped.
+                open.loose(group).forEach { share ->
+                    val ready = open.openable(share)
+                    if (ready == null) item(key = share.id) {
+                        FileRow(share.title, group.audio, 0, null, locked = true) { onEvent(Event.OpenShare(share)) }
+                    } else itemsIndexed(ready.items, key = { _, it -> share.id + "/" + it.id }) { i, item ->
+                        FileRow(item.name, item.isAudio, item.durationMs, item.sizeBytes, locked = false) { onEvent(Event.PlayInGroup(group, ready, i)) }
+                    }
+                }
+                item { Spacer(Modifier.navigationBarsPadding().height(24.dp)) }
+            }
             open.loading && open.shares.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
             open.error != null -> Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -379,12 +393,30 @@ private fun DeviceContent(open: LocalNetworkContract.OpenDevice, refreshing: Boo
                 Text(if (open.loading) "" else "Nothing shared on this device right now.", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             else -> LazyColumn(Modifier.fillMaxSize()) {
-                // Folders first, then single files, like the library.
-                items(open.shares.sortedWith(compareBy({ !it.folder }, { it.title.lowercase() })), key = { it.id }) { share -> ShareRow(share, open, onEvent) }
+                // Shared folders by their own names, then one folder per kind for files shared on their own.
+                items(open.shares.filter { it.folder }.sortedBy { it.title.lowercase() }, key = { it.id }) { share -> ShareRow(share, open, onEvent) }
+                items(LocalNetworkContract.Group.entries.filter { open.loose(it).isNotEmpty() }, key = { "group-" + it.name }) { g ->
+                    GroupRow(g, open.loose(g).sumOf { it.itemCount }) { onEvent(Event.OpenGroup(g)) }
+                }
                 item { Spacer(Modifier.navigationBarsPadding().height(24.dp)) }
             }
         }
         }
+    }
+}
+
+/** One of the folders gathering files shared on their own; a lock at the end when its files are protected. */
+@Composable
+private fun GroupRow(group: LocalNetworkContract.Group, count: Int, onClick: () -> Unit) {
+    Row(Modifier.fillMaxWidth().height(62.dp).clickable(onClick = onClick).padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+        FolderGlyph(Modifier.size(width = 62.dp, height = 46.dp))
+        Spacer(Modifier.width(16.dp))
+        Column(Modifier.weight(1f)) {
+            Text(group.title, fontSize = 15.sp, lineHeight = 18.sp, color = MaterialTheme.colorScheme.primary, maxLines = 1)
+            Spacer(Modifier.height(2.dp))
+            Text(countLabel(count, group.audio), fontSize = 12.sp, lineHeight = 15.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        if (group.protected) LockMark()
     }
 }
 

@@ -39,6 +39,10 @@ class LanDiscoveryE2ETest {
             null, ShareAccess.Public, null, null, nowMs() + 3_600_000)
         // Optional: a device PIN, and a protected folder share of the same file with its own PIN.
         System.getenv("LAN_E2E_PIN")?.let { store.setDevicePin(it) }
+        System.getenv("LAN_E2E_LOOSE_PIN")?.let { pin ->
+            sharing.share("Protected clip", listOf(MediaFile(3, "file://${file.path}#3", file.path, "Protected clip.mp4", file.length(), 0, 0)),
+                null, ShareAccess.Protected, pin, null, null)
+        }
         System.getenv("LAN_E2E_SHARE_PIN")?.let { pin ->
             sharing.share("Protected folder", listOf(MediaFile(2, "file://${file.path}#2", file.path, file.name, file.length(), 0, 0)),
                 file.parent, ShareAccess.Protected, pin, null, null)

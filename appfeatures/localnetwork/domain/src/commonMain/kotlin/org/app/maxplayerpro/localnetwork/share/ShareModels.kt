@@ -85,6 +85,8 @@ data class RemoteShare(
     val expiresAtMs: Long? = null,
     val items: List<RemoteItem> = emptyList(),
     val folder: Boolean = false,
+    /** Every file is audio; lets a viewer file a locked share under Music before its items are visible. */
+    val audio: Boolean = false,
 )
 
 /** A playable item; [path] is relative to the host and carries no access token. */
