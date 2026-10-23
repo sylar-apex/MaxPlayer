@@ -1,5 +1,12 @@
 package org.app.maxplayerpro.localnetwork.ui
 
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.animation.AnimatedVisibility
 import org.app.maxplayerpro.appcore.component.SharedGreen
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material.icons.automirrored.filled.Logout
@@ -82,6 +89,7 @@ import org.app.kmediaplayer.ui.common.PlayerDialog
 import org.app.kmediaplayer.util.formatDuration
 import org.app.kmediaplayer.util.formatSize
 import org.app.maxplayerpro.appcore.component.FolderGlyph
+import org.app.maxplayerpro.appcore.component.PullRefresh
 import org.app.maxplayerpro.appcore.component.TopBar
 import org.app.maxplayerpro.localnetwork.share.HostState
 import org.app.maxplayerpro.localnetwork.share.RemoteShare
@@ -100,7 +108,7 @@ fun LocalNetworkScreen(onBack: () -> Unit, viewModel: LocalNetworkViewModel = ko
 fun LocalNetworkContent(state: LocalNetworkContract.State, onBack: () -> Unit, onEvent: (Event) -> Unit) {
     val open = state.open
     if (open != null) {
-        DeviceContent(open, onEvent)
+        DeviceContent(open, state.refreshing, onEvent)
     } else {
         DeviceListContent(state, onBack, onEvent)
     }
@@ -130,12 +138,14 @@ private fun DeviceListContent(state: LocalNetworkContract.State, onBack: () -> U
                 }
             }
         }
-        LazyColumn(Modifier.fillMaxWidth().weight(1f)) {
+        PullRefresh(state.refreshing, { onEvent(Event.Refresh) }, Modifier.fillMaxWidth().weight(1f)) {
+        LazyColumn(Modifier.fillMaxSize()) {
             when (tab) {
                 LocalNetworkContract.Tab.SharedWithMe -> devicesList(state, onEvent, onAdd = { adding = true })
                 LocalNetworkContract.Tab.SharedByMe -> sharedByMe(state, onEvent)
             }
             item { Spacer(Modifier.navigationBarsPadding().height(24.dp)) }
+        }
         }
     }
     if (adding) AddAddressDialog(onDismiss = { adding = false }, onAdd = { adding = false; onEvent(Event.AddAddress(it)) })
@@ -207,6 +217,7 @@ private fun HostCard(state: LocalNetworkContract.State, onEvent: (Event) -> Unit
     val on = host is HostState.Running || host == HostState.Starting
     var editingPin by remember { mutableStateOf(false) }
     var editingLimit by remember { mutableStateOf(false) }
+    var expanded by rememberSaveable { mutableStateOf(false) }
     Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp)) {
         Card {
             Row(Modifier.fillMaxWidth().padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -228,26 +239,41 @@ private fun HostCard(state: LocalNetworkContract.State, onEvent: (Event) -> Unit
                 }
                 Switch(on, { onEvent(if (it) Event.StartHosting else Event.StopHosting) })
             }
-            if (host is HostState.Running && host.addresses.isNotEmpty()) {
-                HorizontalDivider(color = MaterialTheme.colorScheme.background)
-                Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Language, null, Modifier.size(22.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
-                    Spacer(Modifier.width(16.dp))
-                    Column(Modifier.weight(1f)) {
-                        Text("Open in a browser", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        SelectionContainer { Column { host.addresses.forEach { Text(it, fontSize = 15.sp, fontWeight = FontWeight.Medium) } } }
+            HorizontalDivider(color = MaterialTheme.colorScheme.background)
+            // Settings fold away so the shared list stays in view; the summary says what they are set to.
+            Row(Modifier.fillMaxWidth().clickable { expanded = !expanded }.padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Settings, null, Modifier.size(22.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.width(16.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("Settings", fontSize = 15.sp)
+                    val limit = state.device.untilMs?.let { "${timeLeft((it - state.nowMs).coerceAtLeast(0))} left" } ?: "No limit"
+                    Text("PIN ${if (state.device.pin != null) "on" else "off"} · $limit", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                Icon(if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown, if (expanded) "Hide settings" else "Show settings",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            AnimatedVisibility(expanded) {
+                Column {
+                    if (host is HostState.Running && host.addresses.isNotEmpty()) {
+                        HorizontalDivider(color = MaterialTheme.colorScheme.background)
+                        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.Language, null, Modifier.size(22.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Spacer(Modifier.width(16.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text("Open in a browser", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                SelectionContainer { Column { host.addresses.forEach { Text(it, fontSize = 15.sp, fontWeight = FontWeight.Medium) } } }
+                            }
+                        }
                     }
+                    HorizontalDivider(color = MaterialTheme.colorScheme.background)
+                    SettingRow(Icons.Default.Lock, "Device PIN", if (state.device.pin != null) "On" else "Off") { editingPin = true }
+                    HorizontalDivider(color = MaterialTheme.colorScheme.background)
+                    SettingRow(Icons.Default.Timer, "Share device for",
+                        state.device.untilMs?.let { "${timeLeft((it - state.nowMs).coerceAtLeast(0))} left" } ?: "No limit") { editingLimit = true }
+                    HorizontalDivider(color = MaterialTheme.colorScheme.background)
+                    SettingRow(Icons.AutoMirrored.Filled.Logout, "Log out all devices", null) { onEvent(Event.LogOutAllDevices) }
                 }
             }
-        }
-        Spacer(Modifier.height(12.dp))
-        Card {
-            SettingRow(Icons.Default.Lock, "Device PIN", if (state.device.pin != null) "On" else "Off") { editingPin = true }
-            HorizontalDivider(color = MaterialTheme.colorScheme.background)
-            SettingRow(Icons.Default.Timer, "Share device for",
-                state.device.untilMs?.let { "${timeLeft((it - state.nowMs).coerceAtLeast(0))} left" } ?: "No limit") { editingLimit = true }
-            HorizontalDivider(color = MaterialTheme.colorScheme.background)
-            SettingRow(Icons.AutoMirrored.Filled.Logout, "Log out all devices", null) { onEvent(Event.LogOutAllDevices) }
         }
     }
     if (editingPin) DevicePinDialog(state.device.pin != null, onDismiss = { editingPin = false }) { editingPin = false; onEvent(Event.SetDevicePin(it)) }
@@ -316,7 +342,7 @@ private fun MyShareRow(share: Share, nowMs: Long, onEvent: (Event) -> Unit) {
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-private fun DeviceContent(open: LocalNetworkContract.OpenDevice, onEvent: (Event) -> Unit) {
+private fun DeviceContent(open: LocalNetworkContract.OpenDevice, refreshing: Boolean, onEvent: (Event) -> Unit) {
     val folder = open.openShareId?.let { id -> open.shares.firstOrNull { it.id == id } }?.let { open.openable(it) }
     BackHandler { onEvent(if (folder != null) Event.CloseShare else Event.CloseDevice) }
     var menu by remember { mutableStateOf(false) }
@@ -331,6 +357,7 @@ private fun DeviceContent(open: LocalNetworkContract.OpenDevice, onEvent: (Event
                 }
             }
         }
+        PullRefresh(refreshing, { onEvent(Event.Refresh) }, Modifier.fillMaxSize()) {
         when {
             folder != null -> LazyColumn(Modifier.fillMaxSize()) {
                 itemsIndexed(folder.items, key = { _, it -> it.id }) { i, item ->
@@ -348,7 +375,7 @@ private fun DeviceContent(open: LocalNetworkContract.OpenDevice, onEvent: (Event
                     OutlinedButton({ onEvent(Event.Refresh) }) { Text("Try again") }
                 }
             }
-            open.shares.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            open.shares.isEmpty() -> Box(Modifier.fillMaxSize().verticalScroll(rememberScrollState()), contentAlignment = Alignment.Center) {
                 Text(if (open.loading) "" else "Nothing shared on this device right now.", color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             else -> LazyColumn(Modifier.fillMaxSize()) {
@@ -356,6 +383,7 @@ private fun DeviceContent(open: LocalNetworkContract.OpenDevice, onEvent: (Event
                 items(open.shares.sortedWith(compareBy({ !it.folder }, { it.title.lowercase() })), key = { it.id }) { share -> ShareRow(share, open, onEvent) }
                 item { Spacer(Modifier.navigationBarsPadding().height(24.dp)) }
             }
+        }
         }
     }
 }

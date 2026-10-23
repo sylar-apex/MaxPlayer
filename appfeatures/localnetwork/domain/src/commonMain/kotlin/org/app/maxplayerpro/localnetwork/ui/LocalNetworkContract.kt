@@ -76,6 +76,8 @@ class LocalNetworkContract {
         val devices: List<DeviceEntry> = emptyList(),
         val open: OpenDevice? = null,
         val prompt: PinPrompt? = null,
+        /** A pull-to-refresh reload is running. */
+        val refreshing: Boolean = false,
         val nowMs: Long = 0,
     ) : UiState
 

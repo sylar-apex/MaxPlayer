@@ -7,6 +7,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import org.app.kmediaplayer.util.nowMs
 import org.app.maxplayerpro.localnetwork.share.NearbyClient
@@ -93,8 +94,9 @@ class LocalNetworkViewModel(
                 saved.value = store.savedAddresses
             }
             Event.Refresh -> {
-                currentState.devices.forEach { probe(it.baseUrl) }
-                currentState.open?.let { loadShares(it.baseUrl) }
+                val jobs = currentState.devices.map { probe(it.baseUrl) } + listOfNotNull(currentState.open?.let { loadShares(it.baseUrl) })
+                updateState { copy(refreshing = true) }
+                viewModelScope.launch { jobs.joinAll(); updateState { copy(refreshing = false) } }
             }
             is Event.OpenDevice -> openDevice(event.baseUrl)
             Event.CloseDevice -> { openJob?.cancel(); updateState { copy(open = null, prompt = null) } }
@@ -112,7 +114,7 @@ class LocalNetworkViewModel(
     }
 
     /** Refreshes a device's name, lock state and reachability for the list. */
-    private fun probe(baseUrl: String) {
+    private fun probe(baseUrl: String): Job =
         viewModelScope.launch {
             val info = runCatching { client.info(baseUrl) }.getOrNull()
             updateState {
@@ -124,7 +126,6 @@ class LocalNetworkViewModel(
                 })
             }
         }
-    }
 
     private fun openDevice(baseUrl: String) {
         val entry = currentState.devices.firstOrNull { it.baseUrl == baseUrl }
@@ -133,9 +134,9 @@ class LocalNetworkViewModel(
     }
 
     /** Loads the open device's shares with the remembered tokens; asks for the device PIN when they're missing or void. */
-    private fun loadShares(baseUrl: String, quiet: Boolean = false) {
+    private fun loadShares(baseUrl: String, quiet: Boolean = false): Job {
         openJob?.cancel()
-        openJob = viewModelScope.launch {
+        return viewModelScope.launch {
             if (!quiet) editOpen { it.copy(loading = true, error = null) }
             val result = runCatching {
                 val info = client.info(baseUrl)
@@ -165,7 +166,7 @@ class LocalNetworkViewModel(
                     editOpen { it.copy(loading = false, error = ex?.message ?: "Could not reach the device") }
                 }
             }
-        }
+        }.also { openJob = it }
     }
 
     private fun openShare(share: RemoteShare) {

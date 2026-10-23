@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import org.app.maxplayerpro.appcore.component.EmptyState
 import org.app.maxplayerpro.appcore.component.FileList
+import org.app.maxplayerpro.appcore.component.PullRefresh
 import org.app.maxplayerpro.appcore.component.TopBar
 import org.app.maxplayerpro.appcore.component.ViewMenuDialog
 import org.app.maxplayerpro.appres.resources.Res
@@ -97,7 +98,7 @@ fun HomeContent(state: HomeContract.State, navigation: HomeNavigation, onEvent: 
             if (state.loading) LinearProgressIndicator(Modifier.fillMaxWidth().height(2.dp))
             if (!opts.chipsAtBottom) ShortcutChips(navigation)
             LibrarySourcesBar(folderImport, Modifier.padding(bottom = 8.dp))
-            Box(Modifier.weight(1f)) {
+            PullRefresh(state.loading, { onEvent(HomeContract.Event.Refresh) }, Modifier.weight(1f)) {
                 when (opts.viewMode) {
                     ViewMode.Files -> FileList(state.files, opts, emptyTitle = "No videos found.")
                     ViewMode.Folders, ViewMode.AllFolders -> {

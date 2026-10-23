@@ -1,0 +1,71 @@
+{
+  "format": "xlsx",
+  "verdict": "pass",
+  "checks": [
+    {
+      "id": "package",
+      "status": "pass"
+    },
+    {
+      "id": "contains",
+      "status": "pass",
+      "text": "Search videos"
+    },
+    {
+      "id": "contains",
+      "status": "pass",
+      "text": "View Menu"
+    },
+    {
+      "id": "contains",
+      "status": "pass",
+      "text": "Private Folder"
+    },
+    {
+      "id": "count",
+      "status": "pass",
+      "expected": 7,
+      "actual": 7
+    }
+  ],
+  "summary": {
+    "sheets": [
+      {
+        "name": "Read me",
+        "cells": 29,
+        "formulas": 4
+      },
+      {
+        "name": "App screens",
+        "cells": 1430,
+        "formulas": 0
+      },
+      {
+        "name": "Screen map",
+        "cells": 84,
+        "formulas": 0
+      },
+      {
+        "name": "Controls",
+        "cells": 1732,
+        "formulas": 0
+      },
+      {
+        "name": "Platform matrix",
+        "cells": 84,
+        "formulas": 0
+      },
+      {
+        "name": "PlayerKeys",
+        "cells": 135,
+        "formulas": 0
+      },
+      {
+        "name": "Must not",
+        "cells": 28,
+        "formulas": 0
+      }
+    ],
+    "formulas_evaluated": false
+  }
+}

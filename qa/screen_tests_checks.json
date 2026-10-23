@@ -1,0 +1,146 @@
+{
+  "format": "xlsx",
+  "verdict": "pass",
+  "checks": [
+    {
+      "id": "package",
+      "status": "pass"
+    },
+    {
+      "id": "contains",
+      "status": "pass",
+      "text": "01 Home"
+    },
+    {
+      "id": "contains",
+      "status": "pass",
+      "text": "04 Player"
+    },
+    {
+      "id": "contains",
+      "status": "pass",
+      "text": "07 Privacy"
+    },
+    {
+      "id": "count",
+      "status": "pass",
+      "expected": 22,
+      "actual": 22
+    }
+  ],
+  "summary": {
+    "sheets": [
+      {
+        "name": "Start here",
+        "cells": 96,
+        "formulas": 21
+      },
+      {
+        "name": "01 Home",
+        "cells": 513,
+        "formulas": 0
+      },
+      {
+        "name": "02 Search",
+        "cells": 369,
+        "formulas": 0
+      },
+      {
+        "name": "03 Folder",
+        "cells": 351,
+        "formulas": 0
+      },
+      {
+        "name": "04 Player",
+        "cells": 1755,
+        "formulas": 0
+      },
+      {
+        "name": "05 Music",
+        "cells": 324,
+        "formulas": 0
+      },
+      {
+        "name": "06 Now Playing",
+        "cells": 180,
+        "formulas": 0
+      },
+      {
+        "name": "07 Privacy",
+        "cells": 63,
+        "formulas": 0
+      },
+      {
+        "name": "08 Video Playlist",
+        "cells": 90,
+        "formulas": 0
+      },
+      {
+        "name": "09 Profile",
+        "cells": 144,
+        "formulas": 0
+      },
+      {
+        "name": "10 Theme",
+        "cells": 45,
+        "formulas": 0
+      },
+      {
+        "name": "11 Settings",
+        "cells": 108,
+        "formulas": 0
+      },
+      {
+        "name": "12 Settings List",
+        "cells": 90,
+        "formulas": 0
+      },
+      {
+        "name": "13 Settings Player",
+        "cells": 198,
+        "formulas": 0
+      },
+      {
+        "name": "14 Settings Decoder",
+        "cells": 18,
+        "formulas": 0
+      },
+      {
+        "name": "15 Settings Audio",
+        "cells": 126,
+        "formulas": 0
+      },
+      {
+        "name": "16 Settings Subtitle",
+        "cells": 63,
+        "formulas": 0
+      },
+      {
+        "name": "17 Settings General",
+        "cells": 91,
+        "formulas": 0
+      },
+      {
+        "name": "18 Media Manager",
+        "cells": 279,
+        "formulas": 0
+      },
+      {
+        "name": "19 Networks",
+        "cells": 27,
+        "formulas": 0
+      },
+      {
+        "name": "20 Help",
+        "cells": 50,
+        "formulas": 0
+      },
+      {
+        "name": "21 Wide window",
+        "cells": 171,
+        "formulas": 0
+      }
+    ],
+    "formulas_evaluated": false
+  }
+}
