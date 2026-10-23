@@ -11,6 +11,7 @@ import org.app.maxplayerpro.folder.ui.FolderScreen
 import org.app.maxplayerpro.help.ui.HelpScreen
 import org.app.maxplayerpro.home.ui.HomeNavigation
 import org.app.maxplayerpro.home.ui.HomeScreen
+import org.app.maxplayerpro.gallery.ui.GalleryScreen
 import org.app.maxplayerpro.localnetwork.ui.LocalNetworkScreen
 import org.app.maxplayerpro.localnetwork.ui.SharingToggle
 import org.app.maxplayerpro.mediamanager.domain.model.MediaListKind
@@ -44,6 +45,7 @@ fun NavGraphBuilder.appNavGraph(navController: NavController) {
                 onFileTransfer = { navController.push(Routes.Unavailable("File Transfer", FILE_TRANSFER_REASON)) },
                 onPlaylists = { navController.push(Routes.Playlists) },
                 onNetwork = { navController.push(Routes.LocalNetwork) },
+                onGallery = { navController.push(Routes.Gallery) },
                 sharingToggle = { SharingToggle() },
             ),
         )
@@ -89,6 +91,7 @@ fun NavGraphBuilder.appNavGraph(navController: NavController) {
     composable<Routes.MediaList> { entry -> MediaListScreen(MediaListKind.valueOf(entry.toRoute<Routes.MediaList>().kind), onBack = back) }
     composable<Routes.Help> { HelpScreen(onBack = back) }
     composable<Routes.LocalNetwork> { LocalNetworkScreen(onBack = back) }
+    composable<Routes.Gallery> { GalleryScreen(onBack = back) }
     composable<Routes.Unavailable> { entry ->
         val route = entry.toRoute<Routes.Unavailable>()
         InfoScreen(route.title, route.reason, onBack = back)

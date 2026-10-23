@@ -20,5 +20,6 @@ object Routes {
     @Serializable data class MediaList(val kind: String)
     @Serializable data object Help
     @Serializable data object LocalNetwork
+    @Serializable data object Gallery
     @Serializable data class Unavailable(val title: String, val reason: String)
 }

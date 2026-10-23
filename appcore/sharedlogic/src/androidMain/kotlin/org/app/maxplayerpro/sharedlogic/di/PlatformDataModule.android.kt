@@ -15,5 +15,6 @@ actual fun platformDataModule(): Module = module {
     single<StoreFactory> { val context = get<Context>(); StoreFactory { name -> PrefsStore(context.getSharedPreferences(name, Context.MODE_PRIVATE)) } }
     single<FolderImport> { FolderImport.None }
     single<MediaRepository> { AndroidMediaRepository(get(), get(), get()) }
+    single<org.app.maxplayerpro.sharedlogic.data.PhotoRepository> { org.app.maxplayerpro.sharedlogic.data.AndroidPhotoRepository(get()) }
     single<PrivateFolderRepository> { AndroidPrivateFolder(get()) }
 }

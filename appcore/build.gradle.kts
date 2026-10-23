@@ -47,6 +47,9 @@ kotlin {
             api(libs.compose.material3)
             api(libs.compose.materialIconsExtended)
             api(libs.compose.uiBackhandler)
+            // Photos: local files and, from other devices, over HTTP.
+            api(libs.coil.compose)
+            api(libs.coil.network.ktor3)
             api(libs.compose.uiToolingPreview)
             api(libs.androidx.lifecycle.runtimeCompose)
             api(libs.androidx.lifecycle.viewmodelCompose)

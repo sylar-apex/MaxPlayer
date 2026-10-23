@@ -1,5 +1,6 @@
 package org.app.maxplayerpro.home.ui.component
 
+import androidx.compose.material.icons.outlined.PhotoLibrary
 import org.app.maxplayerpro.appcore.adaptive.LocalWindowClass
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.DropdownMenu
@@ -87,6 +88,20 @@ internal fun ShortcutChips(navigation: HomeNavigation, modifier: Modifier = Modi
         Chip(Res.drawable.ic_chip_privacy, "Privacy", navigation.onPrivacy)
         Chip(Res.drawable.ic_chip_playlist, "Video Playlist", navigation.onPlaylists)
         Chip(Res.drawable.ic_local_network, "Network", navigation.onNetwork)
+        IconChip(Icons.Outlined.PhotoLibrary, "Gallery", navigation.onGallery)
+    }
+}
+
+/** A chip with a vector icon, for sections without a drawable of their own. */
+@Composable
+private fun IconChip(icon: androidx.compose.ui.graphics.vector.ImageVector, label: String, onClick: () -> Unit) {
+    Row(
+        Modifier.height(32.dp).background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(50)).clickable(onClick = onClick).padding(start = 12.dp, end = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(icon, null, Modifier.size(18.dp))
+        Spacer(Modifier.width(4.dp))
+        Text(label, fontSize = 11.sp, fontWeight = FontWeight.Medium)
     }
 }
 

@@ -4,6 +4,7 @@ import com.psbapp.di.KoinModulesInterface
 import com.psbapp.utils.dispatcher.dispatcherDiModule
 import org.app.maxplayerpro.appcore.di.appCoreModule
 import org.app.maxplayerpro.folder.di.folderDomainModule
+import org.app.maxplayerpro.gallery.di.galleryDomainModule
 import org.app.maxplayerpro.help.di.helpDomainModule
 import org.app.maxplayerpro.home.di.homeDomainModule
 import org.app.maxplayerpro.localnetwork.di.localNetworkDomainModule
@@ -38,5 +39,6 @@ object AppModules : KoinModulesInterface {
         mediaManagerDomainModule(),
         helpDomainModule(),
         localNetworkDomainModule(),
+        galleryDomainModule(),
     )
 }

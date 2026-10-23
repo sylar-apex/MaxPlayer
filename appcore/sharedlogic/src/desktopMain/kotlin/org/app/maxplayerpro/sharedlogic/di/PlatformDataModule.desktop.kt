@@ -56,5 +56,6 @@ actual fun platformDataModule(): Module = module {
     single<StoreFactory> { StoreFactory { name -> PreferencesStore(Preferences.userRoot().node("org/app/maxplayerpro/$name")) } }
     single<FolderImport> { FolderImport.None }
     single<MediaRepository> { DesktopMediaRepository() }
+    single<org.app.maxplayerpro.sharedlogic.data.PhotoRepository> { org.app.maxplayerpro.sharedlogic.data.DesktopPhotoRepository() }
     single<PrivateFolderRepository> { MemoryPrivateFolder() }
 }

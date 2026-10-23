@@ -25,6 +25,28 @@ interface MediaRepository {
     suspend fun storageSummary(): StorageSummary?
 }
 
+/** Photos on the device, for the Gallery. Deletes go through [MediaRepository] (same consent prompts). */
+interface PhotoRepository {
+    val photos: StateFlow<List<MediaFile>>
+    val loading: StateFlow<Boolean>
+    suspend fun refresh()
+}
+
+/** Platforms without a photo library here. */
+class NoPhotos : PhotoRepository {
+    override val photos: StateFlow<List<MediaFile>> = kotlinx.coroutines.flow.MutableStateFlow(emptyList<MediaFile>())
+    override val loading: StateFlow<Boolean> = kotlinx.coroutines.flow.MutableStateFlow(false)
+    override suspend fun refresh() {}
+}
+
+/** Image file extensions the Gallery shows. */
+val imageExtensions = setOf("jpg", "jpeg", "png", "gif", "webp", "heic", "heif", "bmp", "avif")
+
+fun imageMime(name: String): String = when (name.substringAfterLast('.', "").lowercase()) {
+    "jpg", "jpeg" -> "image/jpeg"; "png" -> "image/png"; "gif" -> "image/gif"; "webp" -> "image/webp"
+    "heic", "heif" -> "image/heif"; "bmp" -> "image/bmp"; "avif" -> "image/avif"; else -> "image/*"
+}
+
 /** Files moved into app-private storage, protected by a PIN. */
 interface PrivateFolderRepository {
     val files: StateFlow<List<PrivateFile>>

@@ -64,6 +64,7 @@ class HomeNavigation(
     val onFileTransfer: () -> Unit,
     val onPlaylists: () -> Unit,
     val onNetwork: () -> Unit,
+    val onGallery: () -> Unit = {},
     /** The network-sharing switch for the header; drawn by the app shell, which knows about sharing. */
     val sharingToggle: @Composable () -> Unit = {},
 )

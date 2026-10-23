@@ -11,7 +11,7 @@ plugins {
 
 val features = listOf(
     "home", "folder", "search", "music", "player", "settings", "profile",
-    "theme", "playlists", "privatefolder", "mediamanager", "help", "localnetwork",
+    "theme", "playlists", "privatefolder", "mediamanager", "help", "localnetwork", "gallery",
 )
 
 kotlin {
