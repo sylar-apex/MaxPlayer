@@ -54,6 +54,9 @@ import org.app.maxplayerpro.navigation.appNavGraph
 import org.app.maxplayerpro.player.ui.MaxPlayerContent
 import org.app.maxplayerpro.sharedlogic.platform.AppScreen
 import org.app.maxplayerpro.sharedlogic.platform.AppScreenRequests
+import org.app.maxplayerpro.sharedlogic.usecase.NetworkShareRequests
+import org.app.maxplayerpro.localnetwork.share.SharingController
+import org.app.maxplayerpro.localnetwork.ui.NetworkShareDialog
 
 private fun NavController.open(screen: AppScreen) = when (screen) {
     AppScreen.Settings -> push(Routes.Settings)
@@ -111,8 +114,18 @@ fun App(startScreen: AppScreen? = null, embeddedPlayer: Boolean = false) {
             startScreen?.let { navController.open(it) }
             AppScreenRequests.requests.collect { navController.open(it) }
         }
+        NetworkShareHost()
         if (embeddedPlayer) EmbeddedPlayer()
     }
+}
+
+/** Resumes network sharing left on, and shows the share dialog when a list asks to share files on the network. */
+@Composable
+private fun NetworkShareHost() {
+    val sharing = koinInject<SharingController>()
+    LaunchedEffect(sharing) { sharing.resume() }
+    val pending by NetworkShareRequests.pending.collectAsState()
+    pending?.let { files -> NetworkShareDialog(files, onDismiss = NetworkShareRequests::dismiss) }
 }
 
 /** Shows the library's player over the app while [KMediaPlayer.videoRequested] is set. */

@@ -40,6 +40,7 @@ kotlin {
         commonMain.dependencies {
             api(projects.appcore)
             api(projects.appfeatures.localnetwork.domain)
+            implementation(libs.kotlinx.datetime)
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)

@@ -48,6 +48,7 @@ class FileListViewModel(
             }
             is FileListContract.Event.Play -> operations.play(event.files, event.index)
             is FileListContract.Event.Share -> operations.share(event.files)
+            is FileListContract.Event.ShareOnNetwork -> operations.shareOnNetwork(event.files)
             is FileListContract.Event.LockInPrivate -> viewModelScope.launch { operations.lockInPrivate(event.files) }
             is FileListContract.Event.Rename -> viewModelScope.launch { operations.rename(event.file, event.newName) }
             is FileListContract.Event.Delete -> viewModelScope.launch { operations.delete(event.files) }

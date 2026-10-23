@@ -21,6 +21,10 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Network sharing: discovery over multicast, and a foreground service that keeps serving while the phone is locked. -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
 
     <application
         android:name=".MaxPlayerApplication"
@@ -31,6 +35,7 @@
         android:requestLegacyExternalStorage="true"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
+        android:usesCleartextTraffic="true"
         android:theme="@style/Theme.MaxPlayer">
         <activity
             android:name=".MainActivity"
@@ -82,6 +87,11 @@
                 <data android:mimeType="application/dash+xml" />
             </intent-filter>
         </activity>
+
+        <service
+            android:name="org.app.maxplayerpro.localnetwork.share.ShareHostService"
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice" />
 
     </application>
 

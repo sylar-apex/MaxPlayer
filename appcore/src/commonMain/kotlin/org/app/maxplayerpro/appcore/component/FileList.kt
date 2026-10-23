@@ -41,6 +41,7 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -196,6 +197,7 @@ fun FileList(
             Row(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant).navigationBarsPadding(), horizontalArrangement = Arrangement.SpaceEvenly) {
                 IconButton({ selected = if (selected.size == files.size) emptySet() else files.map { it.uri }.toSet() }) { Icon(Icons.Default.DoneAll, "Select all") }
                 IconButton({ send(Event.Share(selFiles)) }) { Icon(Icons.Default.Share, "Share") }
+                IconButton({ send(Event.ShareOnNetwork(selFiles)); selected = emptySet() }) { Icon(Icons.Default.Wifi, "Share on network") }
                 IconButton({ addToPlaylist = selFiles }) { Icon(Icons.AutoMirrored.Filled.PlaylistPlay, "Add to playlist") }
                 IconButton({ send(Event.LockInPrivate(selFiles)); selected = emptySet() }) { Icon(Icons.Default.Lock, "Lock") }
                 IconButton({ selFiles.singleOrNull()?.let { renaming = it } }, enabled = selected.size == 1) { Icon(Icons.Default.Edit, "Rename") }
@@ -209,6 +211,7 @@ fun FileList(
             f, edits = state.allowEdits, onDismiss = { actionsFor = null },
             onUnavailable = { what -> send(Event.Toast("$what is not available in Max Player Pro")) },
             onLock = { send(Event.LockInPrivate(listOf(f))) }, onShare = { send(Event.Share(listOf(f))) },
+            onShareOnNetwork = { send(Event.ShareOnNetwork(listOf(f))) },
             onProperties = { infoFor = listOf(f) }, onAddToPlaylist = { addToPlaylist = listOf(f) },
             onRename = { renaming = f }, onDelete = { confirmDelete = listOf(f) },
         )
@@ -295,6 +298,7 @@ private fun FileRow(
 @Composable
 private fun FileActionsSheet(
     f: MediaFile, edits: Boolean, onDismiss: () -> Unit, onUnavailable: (String) -> Unit, onLock: () -> Unit, onShare: () -> Unit,
+    onShareOnNetwork: () -> Unit,
     onProperties: () -> Unit, onAddToPlaylist: () -> Unit, onRename: () -> Unit, onDelete: () -> Unit,
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
@@ -307,7 +311,7 @@ private fun FileActionsSheet(
                 Text(label, fontSize = 15.sp, color = tint)
             }
         }
-        item(Res.drawable.ic_fm_transfer, "File Transfer", true) { onUnavailable("File Transfer") }
+        item(Res.drawable.ic_fm_transfer, "Share on network", true, onShareOnNetwork)
         item(Res.drawable.ic_fm_lock, "Lock in Private Folder", true, onLock)
         item(Res.drawable.ic_fm_mp3, "Convert to MP3", true) { onUnavailable("Convert to MP3") }
         item(Res.drawable.ic_fm_share, "Share", true, onShare)

@@ -12,6 +12,7 @@ class FileListContract {
         data class FilesShown(val files: List<MediaFile>) : Event()
         data class Play(val files: List<MediaFile>, val index: Int) : Event()
         data class Share(val files: List<MediaFile>) : Event()
+        data class ShareOnNetwork(val files: List<MediaFile>) : Event()
         data class LockInPrivate(val files: List<MediaFile>) : Event()
         data class Rename(val file: MediaFile, val newName: String) : Event()
         data class Delete(val files: List<MediaFile>) : Event()
