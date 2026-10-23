@@ -42,6 +42,15 @@ actual object PlatformApp {
         return withContext(Dispatchers.IO) { runCatching { context.contentResolver.openInputStream(uri)!!.use { it.readBytes().decodeToString() } }.getOrNull() }
     }
 
+    actual suspend fun pickFolder(): Pair<String, String>? {
+        val tree: Uri = launchForResult(ActivityResultContracts.OpenDocumentTree(), null) ?: return null
+        val flags = android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+        // Keep the grant, so the same folder works for later downloads after a restart.
+        runCatching { ActivityTracker.activity?.contentResolver?.takePersistableUriPermission(tree, flags) }
+        val label = android.provider.DocumentsContract.getTreeDocumentId(tree).substringAfter(':').ifEmpty { "Selected folder" }
+        return tree.toString() to label
+    }
+
     actual fun openLanguageSettings() {
         val intent = if (Build.VERSION.SDK_INT >= 33)
             Intent(Settings.ACTION_APP_LOCALE_SETTINGS, Uri.fromParts("package", context.packageName, null))

@@ -34,4 +34,4 @@ private class DesktopHostPlatform : HostPlatform {
     }
 }
 
-actual fun platformShareModule(): Module = jvmShareModule { DesktopHostPlatform() }
+actual fun platformShareModule(): Module = jvmShareModule({ DesktopHostPlatform() }, { DesktopDownloadSink() })

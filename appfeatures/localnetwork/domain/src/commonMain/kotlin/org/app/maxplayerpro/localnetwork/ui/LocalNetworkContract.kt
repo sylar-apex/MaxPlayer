@@ -4,6 +4,8 @@ import com.psbapp.mvi.UiEffect
 import com.psbapp.mvi.UiEvent
 import com.psbapp.mvi.UiState
 import org.app.maxplayerpro.localnetwork.share.DeviceSharing
+import org.app.maxplayerpro.localnetwork.share.DownloadTask
+import org.app.maxplayerpro.localnetwork.share.SaveLocation
 import org.app.maxplayerpro.localnetwork.share.HostState
 import org.app.maxplayerpro.localnetwork.share.RemoteShare
 import org.app.maxplayerpro.localnetwork.share.Share
@@ -36,6 +38,10 @@ class LocalNetworkContract {
         data class OpenGroup(val group: Group) : Event()
         /** Plays item [index] of [share] within [group]; the group's other open files play next. */
         data class PlayInGroup(val group: Group, val share: RemoteShare, val index: Int) : Event()
+        /** Saves item [index] of [share] as [name] in [location]. */
+        data class Download(val share: RemoteShare, val index: Int, val name: String, val location: SaveLocation) : Event()
+        data class CancelDownload(val id: String) : Event()
+        data object ClearDownloads : Event()
         /** Forgets the PINs entered for the open device and closes it. */
         data object ForgetOpenDevice : Event()
     }
@@ -93,6 +99,9 @@ class LocalNetworkContract {
         val devices: List<DeviceEntry> = emptyList(),
         val open: OpenDevice? = null,
         val prompt: PinPrompt? = null,
+        val canDownload: Boolean = false,
+        val downloadsLabel: String = "",
+        val downloads: List<DownloadTask> = emptyList(),
         /** A pull-to-refresh reload is running. */
         val refreshing: Boolean = false,
         val nowMs: Long = 0,

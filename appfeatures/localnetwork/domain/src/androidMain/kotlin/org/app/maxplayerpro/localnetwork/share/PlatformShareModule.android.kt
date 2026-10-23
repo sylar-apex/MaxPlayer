@@ -43,4 +43,4 @@ private class AndroidHostPlatform(private val context: Context) : HostPlatform {
     }
 }
 
-actual fun platformShareModule(): Module = jvmShareModule { AndroidHostPlatform(get()) }
+actual fun platformShareModule(): Module = jvmShareModule({ AndroidHostPlatform(get()) }, { AndroidDownloadSink(get()) })

@@ -18,6 +18,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDateRangePickerState
@@ -96,6 +97,7 @@ fun NetworkShareDialog(targets: List<ShareTarget>, onDismiss: () -> Unit) {
     var title by remember { mutableStateOf(existing?.title ?: folderName ?: if (files.size == 1) files[0].title else "${files.size} files") }
     var mode by remember { mutableStateOf(when (existing?.access) { ShareAccess.Public -> Mode.Public; ShareAccess.Protected -> Mode.Protected; null -> Mode.Public }) }
     var pin by remember { mutableStateOf(existing?.code ?: ShareStore.newCode()) }
+    var allowDownload by remember { mutableStateOf(existing?.allowDownload ?: false) }
     val expiry = rememberExpiryState(if (existing?.expiresAtMs == null) Expiry.Never else Expiry.Range,
         existing?.let { s -> s.expiresAtMs?.let { (s.startsAtMs ?: s.createdAtMs) to it } })
 
@@ -126,6 +128,14 @@ fun NetworkShareDialog(targets: List<ShareTarget>, onDismiss: () -> Unit) {
                     }
                 }
                 if (mode != Mode.Private) {
+                    Row(Modifier.fillMaxWidth().clickable { allowDownload = !allowDownload }.padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text("Allow download", fontSize = 15.sp)
+                            Text(if (allowDownload) "Others can save these files to their device" else "Others can only watch or listen",
+                                fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        Switch(allowDownload, { allowDownload = it })
+                    }
                     Label("Available for")
                     ExpiryChooser(expiry)
                 }
@@ -145,16 +155,16 @@ fun NetworkShareDialog(targets: List<ShareTarget>, onDismiss: () -> Unit) {
                     val (starts, expires) = window ?: return@launch
                     val access = if (mode == Mode.Protected) ShareAccess.Protected else ShareAccess.Public
                     if (single != null) {
-                        created = sharing.share(title.trim(), files, folderPath, access, pin, starts, expires)
+                        created = sharing.share(title.trim(), files, folderPath, access, pin, starts, expires, allowDownload)
                     } else {
                         // Folders keep their names; loose files go together in one share.
                         val loose = targets.filter { it.folderPath == null }.flatMap { it.files }
                         var last: Share? = null
                         targets.filter { it.folderPath != null }.forEach { t ->
                             val path = t.folderPath!!
-                            last = sharing.share(path.substringAfterLast('/').ifEmpty { path }, t.files, t.folderPath, access, pin, starts, expires)
+                            last = sharing.share(path.substringAfterLast('/').ifEmpty { path }, t.files, t.folderPath, access, pin, starts, expires, allowDownload)
                         }
-                        if (loose.isNotEmpty()) last = sharing.share(if (loose.size == 1) loose[0].title else "${loose.size} files", loose, null, access, pin, starts, expires)
+                        if (loose.isNotEmpty()) last = sharing.share(if (loose.size == 1) loose[0].title else "${loose.size} files", loose, null, access, pin, starts, expires, allowDownload)
                         created = last
                     }
                 }

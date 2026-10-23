@@ -74,6 +74,7 @@ class ShareStore(private val store: KeyValueStore) {
         nowMs: Long,
         startsAtMs: Long?,
         expiresAtMs: Long?,
+        allowDownload: Boolean = false,
     ): Share {
         var saved: Share? = null
         mutate { list ->
@@ -90,6 +91,7 @@ class ShareStore(private val store: KeyValueStore) {
                 startsAtMs = startsAtMs,
                 expiresAtMs = expiresAtMs,
                 folderPath = folderPath,
+                allowDownload = allowDownload,
             )
             saved = share
             if (existing == null) list + share else list.map { if (it.id == existing.id) share else it }

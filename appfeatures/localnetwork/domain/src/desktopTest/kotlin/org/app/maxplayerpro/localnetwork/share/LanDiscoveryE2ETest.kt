@@ -37,7 +37,7 @@ class LanDiscoveryE2ETest {
         val discovery = MulticastDiscovery(store, host, platform, client)
         val sharing = SharingController(store, host, discovery, client)
         sharing.share("Mac test share", listOf(MediaFile(1, "file://${file.path}", file.path, file.name, file.length(), 0, 0, width = System.getenv("LAN_E2E_W")?.toInt() ?: 0, height = System.getenv("LAN_E2E_H")?.toInt() ?: 0)),
-            null, ShareAccess.Public, null, null, nowMs() + 3_600_000)
+            null, ShareAccess.Public, null, null, nowMs() + 3_600_000, allowDownload = System.getenv("LAN_E2E_DL") == "1")
         // Optional: a device PIN, and a protected folder share of the same file with its own PIN.
         System.getenv("LAN_E2E_PIN")?.let { store.setDevicePin(it) }
         System.getenv("LAN_E2E_LOOSE_PIN")?.let { pin ->

@@ -60,6 +60,7 @@ import kotlin.reflect.KClass
 private class SidebarItem(val label: String, val icon: ImageVector, val route: Any, val routes: List<KClass<*>>)
 
 private val library = listOf(
+    SidebarItem("Storage", Icons.Outlined.Storage, Routes.MediaManager, listOf(Routes.MediaManager::class, Routes.MediaList::class)),
     SidebarItem("Videos", Icons.Outlined.VideoLibrary, Routes.Home, listOf(Routes.Home::class, Routes.Folder::class, Routes.Search::class)),
     SidebarItem("Music", Icons.Outlined.MusicNote, Routes.Music, listOf(Routes.Music::class)),
     SidebarItem("Playlists", Icons.AutoMirrored.Outlined.PlaylistPlay, Routes.Playlists, listOf(Routes.Playlists::class, Routes.PlaylistDetail::class)),
@@ -68,7 +69,6 @@ private val library = listOf(
 
 private val more = listOf(
     SidebarItem("Network", Icons.Outlined.SettingsInputAntenna, Routes.LocalNetwork, listOf(Routes.LocalNetwork::class)),
-    SidebarItem("Storage", Icons.Outlined.Storage, Routes.MediaManager, listOf(Routes.MediaManager::class, Routes.MediaList::class)),
     SidebarItem("Theme", Icons.Outlined.Palette, Routes.Theme, listOf(Routes.Theme::class)),
 )
 

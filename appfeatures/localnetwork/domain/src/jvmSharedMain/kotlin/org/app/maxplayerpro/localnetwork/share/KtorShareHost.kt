@@ -5,6 +5,7 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.OutgoingContent
+import io.ktor.http.encodeURLParameter
 import io.ktor.http.encodeURLPathPart
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.Application
@@ -179,17 +180,24 @@ class KtorShareHost(private val store: ShareStore, private val platform: HostPla
                     }
                 }
             }
-            get("/media/{share}/{item}/{name}") {
-                val now = nowMs()
-                if (!admitDevice(call, call.request.queryParameters["d"], now)) return@get
-                val share = store.find(call.parameters["share"].orEmpty())
-                if (!admitShare(call, share, call.request.queryParameters["t"], now)) return@get
-                val item = share!!.items.firstOrNull { it.id == call.parameters["item"] } ?: return@get call.respond(HttpStatusCode.NotFound)
-                val size = platform.open(item)?.use { it.size() } ?: return@get call.respond(HttpStatusCode.NotFound)
-                call.response.header(HttpHeaders.CacheControl, "no-store")
-                call.respond(ChannelContent(scope, { platform.open(item) }, size, ContentType.parse(item.mimeType.ifEmpty { "application/octet-stream" })))
-            }
+            get("/media/{share}/{item}/{name}") { serveItem(call, scope, attachment = false) }
+            // Same file, sent to be saved: only when the owner allowed downloads for this share.
+            get("/download/{share}/{item}/{name}") { serveItem(call, scope, attachment = true) }
         }
+    }
+
+    /** Streams (or, with [attachment], downloads) one item after the device and share checks. Ranges are supported either way. */
+    private suspend fun serveItem(call: ApplicationCall, scope: CoroutineScope, attachment: Boolean) {
+        val now = nowMs()
+        if (!admitDevice(call, call.request.queryParameters["d"], now)) return
+        val share = store.find(call.parameters["share"].orEmpty())
+        if (!admitShare(call, share, call.request.queryParameters["t"], now)) return
+        if (attachment && !share!!.allowDownload) return call.respond(HttpStatusCode.Forbidden)
+        val item = share!!.items.firstOrNull { it.id == call.parameters["item"] } ?: return call.respond(HttpStatusCode.NotFound)
+        val size = platform.open(item)?.use { it.size() } ?: return call.respond(HttpStatusCode.NotFound)
+        call.response.header(HttpHeaders.CacheControl, "no-store")
+        if (attachment) call.response.header(HttpHeaders.ContentDisposition, "attachment; filename*=UTF-8''" + item.name.encodeURLParameter())
+        call.respond(ChannelContent(scope, { platform.open(item) }, size, ContentType.parse(item.mimeType.ifEmpty { "application/octet-stream" })))
     }
 
     /** Device-level time limit: past it, nothing on this device opens. */
@@ -255,8 +263,13 @@ class KtorShareHost(private val store: ShareStore, private val platform: HostPla
     }
 
     private fun Share.toRemote(withItems: Boolean) = RemoteShare(
-        id = id, title = title, locked = access == ShareAccess.Protected, itemCount = items.size, expiresAtMs = expiresAtMs, folder = isFolder, audio = items.isNotEmpty() && items.all { it.isAudio },
-        items = if (withItems) items.map { RemoteItem(it.id, it.name, it.sizeBytes, it.durationMs, it.mimeType, it.isAudio, "/media/$id/${it.id}/${it.name.encodeURLPathPart()}", it.width, it.height) } else emptyList(),
+        id = id, title = title, locked = access == ShareAccess.Protected, itemCount = items.size, expiresAtMs = expiresAtMs, folder = isFolder,
+        audio = items.isNotEmpty() && items.all { it.isAudio }, downloadable = allowDownload,
+        items = if (withItems) items.map {
+            val name = it.name.encodeURLPathPart()
+            RemoteItem(it.id, it.name, it.sizeBytes, it.durationMs, it.mimeType, it.isAudio, "/media/$id/${it.id}/$name", it.width, it.height,
+                downloadPath = "/download/$id/${it.id}/$name".takeIf { allowDownload })
+        } else emptyList(),
     )
 
     /** Compares in constant time so response timing does not reveal how many leading digits were right. */

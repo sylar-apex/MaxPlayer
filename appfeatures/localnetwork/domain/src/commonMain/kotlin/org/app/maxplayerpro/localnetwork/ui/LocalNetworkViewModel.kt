@@ -10,7 +10,9 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import org.app.kmediaplayer.util.nowMs
+import org.app.maxplayerpro.localnetwork.share.Downloader
 import org.app.maxplayerpro.localnetwork.share.NearbyClient
+import org.app.maxplayerpro.localnetwork.share.SaveLocation
 import org.app.maxplayerpro.localnetwork.share.NearbyException
 import org.app.maxplayerpro.localnetwork.share.RememberedAccess
 import org.app.maxplayerpro.localnetwork.share.RemoteShare
@@ -30,6 +32,7 @@ class LocalNetworkViewModel(
     private val sharing: SharingController,
     private val client: NearbyClient,
     private val operations: MediaOperations,
+    private val downloader: Downloader,
 ) : MVIBaseViewModel<Event, LocalNetworkContract.State, LocalNetworkContract.Effect>() {
 
     private val saved = MutableStateFlow(emptyList<String>())
@@ -43,7 +46,8 @@ class LocalNetworkViewModel(
 
     init {
         saved.value = store.savedAddresses
-        updateState { copy(canHost = sharing.host.supported, canDiscover = sharing.discovery.supported) }
+        updateState { copy(canHost = sharing.host.supported, canDiscover = sharing.discovery.supported, canDownload = downloader.supported, downloadsLabel = downloader.defaultLabel) }
+        viewModelScope.launch { downloader.tasks.collect { t -> updateState { copy(downloads = t) } } }
         sharing.beginBrowsing()
         viewModelScope.launch {
             combine(sharing.host.state, store.shares, store.device) { h, s, d -> Triple(h, s, d) }
@@ -110,6 +114,9 @@ class LocalNetworkViewModel(
             Event.CloseShare -> editOpen { if (it.openShareId != null) it.copy(openShareId = null) else it.copy(openGroup = null) }
             is Event.OpenGroup -> editOpen { it.copy(openGroup = event.group) }
             is Event.PlayInGroup -> playInGroup(event.group, event.share, event.index)
+            is Event.Download -> download(event.share, event.index, event.name, event.location)
+            is Event.CancelDownload -> downloader.cancel(event.id)
+            Event.ClearDownloads -> downloader.clearFinished()
             is Event.SubmitPin -> submitPin(event.pin)
             Event.CancelPin -> updateState { copy(prompt = null, open = if (open?.shares.isNullOrEmpty() && open?.error == null) null else open) }
             is Event.Play -> play(event.share, event.index)
@@ -259,6 +266,18 @@ class LocalNetworkViewModel(
         val start = ready.takeWhile { it.id != share.id }.sumOf { it.items.size } + index
         val at = start.coerceIn(files.indices)
         if (group.audio) operations.playMusic(files, at) else operations.play(files, at)
+    }
+
+    private fun download(share: RemoteShare, index: Int, name: String, location: SaveLocation) {
+        val open = currentState.open ?: return
+        val withItems = open.unlocked[share.id] ?: share
+        val item = withItems.items.getOrNull(index) ?: return
+        val path = item.downloadPath ?: return operations.toast("The owner doesn't allow downloading this")
+        val access = open.id?.let { store.remembered.value[it] }
+        val query = listOfNotNull(access?.deviceToken?.let { "d=$it" }, access?.shareTokens?.get(share.id)?.takeIf { it.isNotEmpty() }?.let { "t=$it" })
+            .joinToString("&").let { if (it.isEmpty()) "" else "?$it" }
+        downloader.start(open.baseUrl + path + query, name.ifBlank { item.name }, item.sizeBytes, item.mimeType, location)
+        operations.toast("Downloading ${name.ifBlank { item.name }}")
     }
 
     private fun editOpen(change: (OpenDevice) -> OpenDevice) = updateState { copy(open = open?.let(change)) }

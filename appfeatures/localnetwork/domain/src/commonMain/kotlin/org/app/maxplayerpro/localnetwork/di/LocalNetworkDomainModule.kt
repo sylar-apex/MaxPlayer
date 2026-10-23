@@ -15,5 +15,5 @@ fun localNetworkDomainModule() = module {
     single { ShareStore(get<StoreFactory>().open("share")) }
     single { SharingController(get(), get(), get(), get()) }
     single<NetworkShareMarks> { ShareMarksSource(get(), get()) }
-    viewModel { LocalNetworkViewModel(get(), get(), get()) }
+    viewModel { LocalNetworkViewModel(get(), get(), get(), get()) }
 }

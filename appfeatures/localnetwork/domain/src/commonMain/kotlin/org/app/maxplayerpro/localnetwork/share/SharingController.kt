@@ -65,8 +65,11 @@ class SharingController(val store: ShareStore, val host: ShareHost, val discover
     fun endBrowsing() = browsers.update { (it - 1).coerceAtLeast(0) }
 
     /** Shares files or a folder and makes sure the server is up to serve them. */
-    suspend fun share(title: String, files: List<MediaFile>, folderPath: String?, access: ShareAccess, pin: String?, startsAtMs: Long?, expiresAtMs: Long?): Share {
-        val share = store.save(title, files, folderPath, access, pin, nowMs(), startsAtMs, expiresAtMs)
+    suspend fun share(
+        title: String, files: List<MediaFile>, folderPath: String?, access: ShareAccess, pin: String?, startsAtMs: Long?, expiresAtMs: Long?,
+        allowDownload: Boolean = false,
+    ): Share {
+        val share = store.save(title, files, folderPath, access, pin, nowMs(), startsAtMs, expiresAtMs, allowDownload)
         if (host.state.value !is HostState.Running) startHosting()
         return share
     }

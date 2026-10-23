@@ -253,6 +253,33 @@ class KtorShareHostTest {
     }
 
     @Test
+    fun downloadLinkOnlyWhenAllowedAndParallelDownloadIsExact() = runBlocking {
+        val closed = store.save("No dl", listOf(media()), null, ShareAccess.Public, null, nowMs(), null, null, allowDownload = false)
+        assertEquals(403, get("/download/${closed.id}/0/x.mp4").statusCode())
+        assertTrue(shares().single().items.single().downloadPath == null)
+
+        val open = store.save("Dl", listOf(media()), null, ShareAccess.Public, null, nowMs(), null, null, allowDownload = true)
+        val item = shares().single().items.single()
+        val head = get(item.downloadPath!!, "bytes=0-9")
+        assertEquals(206, head.statusCode())
+        assertTrue(head.headers().firstValue("Content-Disposition").orElse("").startsWith("attachment"))
+
+        // 3 MB is under the split size, so also force the 4-part path with a bigger file.
+        val big = File.createTempFile("big", ".bin").apply { writeBytes(Random(3).nextBytes(20_000_000)); deleteOnExit() }
+        val bigShare = store.save("Big", listOf(MediaFile(9, "file://${big.path}", big.path, "big.bin", big.length(), 0, 0)), null,
+            ShareAccess.Public, null, nowMs(), null, null, allowDownload = true)
+        val dir = kotlin.io.path.createTempDirectory("dl").toFile()
+        val downloader = ParallelDownloader(DesktopDownloadSink())
+        val bigItem = shares().first { it.id == bigShare.id }.items.single()
+        downloader.start(base + bigItem.downloadPath, "big.bin", big.length(), "application/octet-stream", SaveLocation.Folder(dir.path, "tmp"))
+        val t0 = System.currentTimeMillis()
+        while (downloader.tasks.value.single().state == DownloadState.Running && System.currentTimeMillis() - t0 < 20_000) kotlinx.coroutines.delay(50)
+        val task = downloader.tasks.value.single()
+        assertEquals(DownloadState.Done, task.state, task.detail)
+        assertContentEquals(big.readBytes(), File(dir, "big.bin").readBytes())
+    }
+
+    @Test
     fun clientNormalizesAddresses() {
         assertEquals("http://192.168.1.5:$DEFAULT_SHARE_PORT", NearbyClient.normalizeAddress(" 192.168.1.5/ "))
         assertEquals("http://192.168.1.5:8080", NearbyClient.normalizeAddress("192.168.1.5:8080"))

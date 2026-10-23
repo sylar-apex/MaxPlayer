@@ -46,6 +46,8 @@ data class Share(
     val expiresAtMs: Long? = null,
     val revoked: Boolean = false,
     val folderPath: String? = null,
+    /** Others may save the files to their device (download button and `/download` links). */
+    val allowDownload: Boolean = false,
 ) {
     val isFolder: Boolean get() = folderPath != null
 
@@ -88,6 +90,8 @@ data class RemoteShare(
     val folder: Boolean = false,
     /** Every file is audio; lets a viewer file a locked share under Music before its items are visible. */
     val audio: Boolean = false,
+    /** The owner allows saving these files; items then carry a [RemoteItem.downloadPath]. */
+    val downloadable: Boolean = false,
 )
 
 /** A playable item; [path] is relative to the host and carries no access token. */
@@ -97,6 +101,8 @@ data class RemoteItem(
     /** Frame size, so the player picks portrait or landscape before the first frame arrives; 0 when unknown. */
     val width: Int = 0,
     val height: Int = 0,
+    /** Path that sends the file as a download; null when the owner doesn't allow downloads. */
+    val downloadPath: String? = null,
 )
 
 @Serializable

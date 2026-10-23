@@ -1,5 +1,15 @@
 package org.app.maxplayerpro.localnetwork.ui
 
+import org.app.maxplayerpro.sharedlogic.platform.PlatformApp
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.material3.Button
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ModalBottomSheet
+import org.app.maxplayerpro.localnetwork.share.SaveLocation
+import org.app.maxplayerpro.localnetwork.share.DownloadState
+import org.app.maxplayerpro.localnetwork.share.DownloadTask
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.foundation.layout.heightIn
 import org.app.maxplayerpro.localnetwork.share.ViewerSession
 import androidx.compose.foundation.verticalScroll
@@ -110,7 +120,7 @@ fun LocalNetworkScreen(onBack: () -> Unit, viewModel: LocalNetworkViewModel = ko
 fun LocalNetworkContent(state: LocalNetworkContract.State, onBack: () -> Unit, onEvent: (Event) -> Unit) {
     val open = state.open
     if (open != null) {
-        DeviceContent(open, state.refreshing, onEvent)
+        DeviceContent(state, open, state.refreshing, onEvent)
     } else {
         DeviceListContent(state, onBack, onEvent)
     }
@@ -376,7 +386,18 @@ private fun MyShareRow(share: Share, nowMs: Long, onEvent: (Event) -> Unit) {
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-private fun DeviceContent(open: LocalNetworkContract.OpenDevice, refreshing: Boolean, onEvent: (Event) -> Unit) {
+private fun DeviceContent(state: LocalNetworkContract.State, open: LocalNetworkContract.OpenDevice, refreshing: Boolean, onEvent: (Event) -> Unit) {
+    val canDownload = state.canDownload
+    // The file whose save sheet is open: (share with items, item index).
+    var saving by remember { mutableStateOf<Pair<RemoteShare, Int>?>(null) }
+    saving?.let { (share, i) ->
+        share.items.getOrNull(i)?.let { item ->
+            DownloadSheet(item.name, item.sizeBytes, state.downloadsLabel, onDismiss = { saving = null }) { name, location ->
+                saving = null
+                onEvent(Event.Download(share, i, name, location))
+            }
+        }
+    }
     val folder = open.openShareId?.let { id -> open.shares.firstOrNull { it.id == id } }?.let { open.openable(it) }
     val group = open.openGroup
     val inside = folder != null || group != null
@@ -393,11 +414,12 @@ private fun DeviceContent(open: LocalNetworkContract.OpenDevice, refreshing: Boo
                 }
             }
         }
-        PullRefresh(refreshing, { onEvent(Event.Refresh) }, Modifier.fillMaxSize()) {
+        PullRefresh(refreshing, { onEvent(Event.Refresh) }, Modifier.fillMaxWidth().weight(1f)) {
         when {
             folder != null -> LazyColumn(Modifier.fillMaxSize()) {
                 itemsIndexed(folder.items, key = { _, it -> it.id }) { i, item ->
-                    FileRow(item.name, item.isAudio, item.durationMs, item.sizeBytes, locked = false) {
+                    FileRow(item.name, item.isAudio, item.durationMs, item.sizeBytes, locked = false,
+                        onDownload = if (canDownload && item.downloadPath != null) ({ saving = folder to i }) else null) {
                         onEvent(Event.Play(folder, i))
                     }
                 }
@@ -410,7 +432,8 @@ private fun DeviceContent(open: LocalNetworkContract.OpenDevice, refreshing: Boo
                     if (ready == null) item(key = share.id) {
                         FileRow(share.title, group.audio, 0, null, locked = true) { onEvent(Event.OpenShare(share)) }
                     } else itemsIndexed(ready.items, key = { _, it -> share.id + "/" + it.id }) { i, item ->
-                        FileRow(item.name, item.isAudio, item.durationMs, item.sizeBytes, locked = false) { onEvent(Event.PlayInGroup(group, ready, i)) }
+                        FileRow(item.name, item.isAudio, item.durationMs, item.sizeBytes, locked = false,
+                            onDownload = if (canDownload && item.downloadPath != null) ({ saving = ready to i }) else null) { onEvent(Event.PlayInGroup(group, ready, i)) }
                     }
                 }
                 item { Spacer(Modifier.navigationBarsPadding().height(24.dp)) }
@@ -436,6 +459,7 @@ private fun DeviceContent(open: LocalNetworkContract.OpenDevice, refreshing: Boo
             }
         }
         }
+        DownloadsPanel(state.downloads, onEvent)
     }
 }
 
@@ -478,7 +502,12 @@ private fun ShareRow(share: RemoteShare, open: LocalNetworkContract.OpenDevice, 
 }
 
 @Composable
-private fun FileRow(name: String, isAudio: Boolean, durationMs: Long, sizeBytes: Long?, locked: Boolean, onClick: () -> Unit) {
+private fun FileRow(
+    name: String, isAudio: Boolean, durationMs: Long, sizeBytes: Long?, locked: Boolean,
+    /** Set when the owner allows saving this file. */
+    onDownload: (() -> Unit)? = null,
+    onClick: () -> Unit,
+) {
     Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(width = 120.dp, height = 68.dp).background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(6.dp)), contentAlignment = Alignment.Center) {
             Icon(if (isAudio) Icons.Default.MusicNote else Icons.Default.Movie, null, Modifier.size(28.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -492,6 +521,7 @@ private fun FileRow(name: String, isAudio: Boolean, durationMs: Long, sizeBytes:
             sizeBytes?.let { Text(formatSize(it), fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
         }
         if (locked) LockMark()
+        onDownload?.let { IconButton(it) { Icon(Icons.Default.Download, "Download", tint = MaterialTheme.colorScheme.onSurfaceVariant) } }
     }
 }
 
@@ -501,6 +531,64 @@ private fun LockMark() {
 }
 
 private fun countLabel(n: Int, audio: Boolean): String = if (audio) "$n ${if (n == 1) "song" else "songs"}" else "$n ${if (n == 1) "video" else "videos"}"
+
+/** Downloads in progress and just finished: progress, cancel, and where finished ones were saved. */
+@Composable
+private fun DownloadsPanel(tasks: List<DownloadTask>, onEvent: (Event) -> Unit) {
+    if (tasks.isEmpty()) return
+    Column(Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.surfaceVariant).navigationBarsPadding().padding(horizontal = 16.dp, vertical = 8.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Downloads", Modifier.weight(1f), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            if (tasks.any { it.state != DownloadState.Running }) TextButton({ onEvent(Event.ClearDownloads) }) { Text("Clear") }
+        }
+        tasks.takeLast(4).forEach { t ->
+            Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(t.name, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    when (t.state) {
+                        DownloadState.Running -> {
+                            val p = if (t.sizeBytes > 0) t.doneBytes.toFloat() / t.sizeBytes else 0f
+                            LinearProgressIndicator({ p }, Modifier.fillMaxWidth().padding(vertical = 4.dp))
+                            Text("${formatSize(t.doneBytes)} of ${formatSize(t.sizeBytes)} · ${(p * 100).toInt()}%", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        DownloadState.Done -> Text("Saved to ${t.detail}", fontSize = 11.sp, color = SharedGreen, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        DownloadState.Failed -> Text(t.detail ?: "Failed", fontSize = 11.sp, color = MaterialTheme.colorScheme.error)
+                        DownloadState.Cancelled -> Text("Cancelled", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                }
+                if (t.state == DownloadState.Running) IconButton({ onEvent(Event.CancelDownload(t.id)) }) { Icon(Icons.Default.Close, "Cancel download") }
+            }
+        }
+    }
+}
+
+/** Asks for the file name and where to save it (Downloads by default), then starts the download. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DownloadSheet(name: String, sizeBytes: Long, defaultLabel: String, onDismiss: () -> Unit, onDownload: (String, SaveLocation) -> Unit) {
+    var fileName by remember { mutableStateOf(name) }
+    var location by remember { mutableStateOf<SaveLocation>(SaveLocation.Default) }
+    val scope = rememberCoroutineScope()
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp).navigationBarsPadding().padding(bottom = 16.dp)) {
+            Text("Download", fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+            Text(formatSize(sizeBytes), fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            OutlinedTextField(fileName, { fileName = it }, Modifier.fillMaxWidth().padding(top = 12.dp), singleLine = true, label = { Text("File name") })
+            Row(Modifier.fillMaxWidth().padding(top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.Folder, null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text("Save to", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(when (val l = location) { SaveLocation.Default -> defaultLabel; is SaveLocation.Folder -> l.label }, fontSize = 15.sp)
+                }
+                TextButton({
+                    scope.launch { PlatformApp.pickFolder()?.let { (id, label) -> location = SaveLocation.Folder(id, label) } }
+                }) { Text("Change") }
+            }
+            Button({ onDownload(fileName.trim(), location) }, Modifier.fillMaxWidth().padding(top = 16.dp), enabled = fileName.isNotBlank()) { Text("Download") }
+        }
+    }
+}
 
 // ---- Dialogs and small pieces ----
 

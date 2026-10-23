@@ -18,6 +18,16 @@ actual object PlatformApp {
         return runCatching { File(dialog.directory, name).readText() }.getOrNull()
     }
 
+    actual suspend fun pickFolder(): Pair<String, String>? {
+        val chooser = javax.swing.JFileChooser(System.getProperty("user.home")).apply {
+            fileSelectionMode = javax.swing.JFileChooser.DIRECTORIES_ONLY
+            dialogTitle = "Save downloads to"
+        }
+        if (chooser.showOpenDialog(null) != javax.swing.JFileChooser.APPROVE_OPTION) return null
+        val dir = chooser.selectedFile ?: return null
+        return dir.absolutePath to dir.name.ifEmpty { dir.absolutePath }
+    }
+
     actual fun openLanguageSettings() {}
     actual fun quit() { exitProcess(0) }
 }
