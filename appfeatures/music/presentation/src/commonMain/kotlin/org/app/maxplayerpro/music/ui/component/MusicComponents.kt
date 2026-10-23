@@ -1,5 +1,6 @@
 package org.app.maxplayerpro.music.ui.component
 
+import org.app.maxplayerpro.sharedlogic.usecase.NetworkShareRequests
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -156,12 +157,14 @@ internal fun Tracks(
     files: List<MediaFile>, favourites: Set<String>, modifier: Modifier, wide: Boolean,
     onAdd: (MediaFile) -> Unit, onToggleFavourite: (MediaFile) -> Unit, onPlay: (Int) -> Unit,
 ) {
+    // Every song can be shared on the network from its menu, like a video.
+    val onShare: (MediaFile) -> Unit = { NetworkShareRequests.request(listOf(it)) }
     if (files.isEmpty()) { EmptyState("No music found.", modifier); return }
     val (nowUri, playing) = rememberNowPlaying()
     if (!wide) {
         LazyColumn(modifier, contentPadding = PaddingValues(vertical = 4.dp)) {
             itemsIndexed(files, key = { _, f -> f.uri }) { i, f ->
-                TrackRow(i, f, f.uri == nowUri, playing, f.uri in favourites, false, { onPlay(i) }, { onAdd(f) }, { onToggleFavourite(f) })
+                TrackRow(i, f, f.uri == nowUri, playing, f.uri in favourites, false, { onPlay(i) }, { onAdd(f) }, { onToggleFavourite(f) }, { onShare(f) })
             }
         }
         return
@@ -181,7 +184,7 @@ internal fun Tracks(
         HorizontalDivider(color = dividerColor())
         LazyColumn(Modifier.fillMaxWidth().weight(1f)) {
             itemsIndexed(files, key = { _, f -> f.uri }) { i, f ->
-                TrackRow(i, f, f.uri == nowUri, playing, f.uri in favourites, true, { onPlay(i) }, { onAdd(f) }, { onToggleFavourite(f) })
+                TrackRow(i, f, f.uri == nowUri, playing, f.uri in favourites, true, { onPlay(i) }, { onAdd(f) }, { onToggleFavourite(f) }, { onShare(f) })
                 if (i < files.lastIndex) HorizontalDivider(Modifier.padding(horizontal = 18.dp), color = dividerColor())
             }
         }
@@ -197,7 +200,7 @@ private fun HeadCell(text: String, modifier: Modifier, center: Boolean = false) 
 @Composable
 private fun TrackRow(
     index: Int, f: MediaFile, current: Boolean, playing: Boolean, favourite: Boolean, wide: Boolean,
-    onPlay: () -> Unit, onAdd: () -> Unit, onToggleFavourite: () -> Unit,
+    onPlay: () -> Unit, onAdd: () -> Unit, onToggleFavourite: () -> Unit, onShare: () -> Unit,
 ) {
     val hover = remember { MutableInteractionSource() }
     val hovered by hover.collectIsHoveredAsState()
@@ -246,7 +249,7 @@ private fun TrackRow(
         } else if (f.durationMs > 0) {
             Text(formatDuration(f.durationMs), Modifier.padding(horizontal = 6.dp), fontSize = 12.sp, color = sub)
         }
-        TrackMenu(favourite, onAdd, onToggleFavourite)
+        TrackMenu(favourite, onAdd, onToggleFavourite, onShare)
     }
 }
 
@@ -256,7 +259,7 @@ private fun RowScope.Cell(text: String, modifier: Modifier) {
 }
 
 @Composable
-private fun TrackMenu(favourite: Boolean, onAdd: () -> Unit, onToggleFavourite: () -> Unit) {
+private fun TrackMenu(favourite: Boolean, onAdd: () -> Unit, onToggleFavourite: () -> Unit, onShare: () -> Unit) {
     var menu by remember { mutableStateOf(false) }
     Box(Modifier.width(48.dp), contentAlignment = Alignment.Center) {
         IconButton({ menu = true }) {
@@ -266,6 +269,7 @@ private fun TrackMenu(favourite: Boolean, onAdd: () -> Unit, onToggleFavourite: 
         DropdownMenu(menu, { menu = false }) {
             DropdownMenuItem({ Text(if (favourite) "Remove from Favourites" else "Add to Favourites") }, { menu = false; onToggleFavourite() })
             DropdownMenuItem({ Text("Add to Playlist") }, { menu = false; onAdd() })
+            DropdownMenuItem({ Text("Share on network") }, { menu = false; onShare() })
         }
     }
 }

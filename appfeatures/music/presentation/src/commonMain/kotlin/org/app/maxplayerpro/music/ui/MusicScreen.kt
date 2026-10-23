@@ -1,5 +1,7 @@
 package org.app.maxplayerpro.music.ui
 
+import androidx.compose.material.icons.filled.Sensors
+import org.app.maxplayerpro.sharedlogic.usecase.NetworkShareRequests
 import org.app.maxplayerpro.appcore.component.PullRefresh
 import androidx.compose.foundation.background
 import androidx.compose.material.icons.outlined.Refresh
@@ -121,7 +123,14 @@ fun MusicContent(state: MusicContract.State, onBack: () -> Unit, onEvent: (Music
             MusicHeader(g.first, g.second, !wide, { play(g.second, 0, false) }, { play(g.second, 0, true) },
                 Modifier.padding(start = 4.dp, end = pad, top = 8.dp, bottom = 12.dp),
                 leading = { IconButton({ group = null }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back") } },
-                middle = { Spacer(Modifier.weight(1f)) })
+                middle = { Spacer(Modifier.weight(1f)) },
+                trailing = {
+                    // Shares the whole album, artist or folder; a real folder is shared as a folder, keeping its name.
+                    IconButton({
+                        val path = g.second.map { it.folderPath }.distinct().singleOrNull()
+                        NetworkShareRequests.request(g.second, path?.takeIf { it.substringAfterLast('/') == g.first })
+                    }) { Icon(Icons.Default.Sensors, "Share on network") }
+                })
             Tracks(g.second, state.favourites, Modifier.weight(1f), wide, onAdd = { addTo = it }, onToggleFavourite = favourite) { play(g.second, it, false) }
             MiniPlayer(addToPlaylist)
         }
