@@ -16,5 +16,6 @@ actual fun platformDataModule(): Module = module {
     single<FolderImport> { FolderImport.None }
     single<MediaRepository> { AndroidMediaRepository(get(), get(), get()) }
     single<org.app.maxplayerpro.sharedlogic.data.PhotoRepository> { org.app.maxplayerpro.sharedlogic.data.AndroidPhotoRepository(get()) }
+    single<org.app.maxplayerpro.sharedlogic.data.FileBrowser> { org.app.maxplayerpro.sharedlogic.data.AndroidFileBrowser(get()) }
     single<PrivateFolderRepository> { AndroidPrivateFolder(get()) }
 }

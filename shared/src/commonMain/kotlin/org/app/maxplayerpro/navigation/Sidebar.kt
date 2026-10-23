@@ -28,6 +28,7 @@ import androidx.compose.material.icons.outlined.MusicNote
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material.icons.outlined.SettingsInputAntenna
+import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.PhotoLibrary
 import androidx.compose.material.icons.outlined.Storage
 import androidx.compose.material.icons.outlined.VideoLibrary
@@ -65,6 +66,7 @@ private val library = listOf(
     SidebarItem("Videos", Icons.Outlined.VideoLibrary, Routes.Home, listOf(Routes.Home::class, Routes.Folder::class, Routes.Search::class)),
     SidebarItem("Music", Icons.Outlined.MusicNote, Routes.Music, listOf(Routes.Music::class)),
     SidebarItem("Gallery", Icons.Outlined.PhotoLibrary, Routes.Gallery, listOf(Routes.Gallery::class)),
+    SidebarItem("Files", Icons.Outlined.FolderOpen, Routes.Files, listOf(Routes.Files::class)),
     SidebarItem("Playlists", Icons.AutoMirrored.Outlined.PlaylistPlay, Routes.Playlists, listOf(Routes.Playlists::class, Routes.PlaylistDetail::class)),
     SidebarItem("Private folder", Icons.Outlined.Lock, Routes.PrivateFolder, listOf(Routes.PrivateFolder::class)),
 )

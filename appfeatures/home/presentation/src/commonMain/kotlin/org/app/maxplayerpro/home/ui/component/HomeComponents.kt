@@ -1,5 +1,6 @@
 package org.app.maxplayerpro.home.ui.component
 
+import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.PhotoLibrary
 import org.app.maxplayerpro.appcore.adaptive.LocalWindowClass
 import androidx.compose.material3.DropdownMenuItem
@@ -89,6 +90,7 @@ internal fun ShortcutChips(navigation: HomeNavigation, modifier: Modifier = Modi
         Chip(Res.drawable.ic_chip_playlist, "Video Playlist", navigation.onPlaylists)
         Chip(Res.drawable.ic_local_network, "Network", navigation.onNetwork)
         IconChip(Icons.Outlined.PhotoLibrary, "Gallery", navigation.onGallery)
+        IconChip(Icons.Outlined.FolderOpen, "Files", navigation.onFiles)
     }
 }
 

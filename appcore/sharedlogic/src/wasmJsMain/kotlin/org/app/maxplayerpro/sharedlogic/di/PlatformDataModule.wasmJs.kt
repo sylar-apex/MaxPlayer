@@ -34,5 +34,6 @@ actual fun platformDataModule(): Module = module {
     single<MediaRepository> { get<WebMediaRepository>() }
     single<FolderImport> { get<WebMediaRepository>() }
     single<org.app.maxplayerpro.sharedlogic.data.PhotoRepository> { org.app.maxplayerpro.sharedlogic.data.NoPhotos() }
+    single<org.app.maxplayerpro.sharedlogic.data.FileBrowser> { org.app.maxplayerpro.sharedlogic.data.NoFileBrowser }
     single<PrivateFolderRepository> { MemoryPrivateFolder() }
 }
