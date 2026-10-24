@@ -30,6 +30,43 @@ private class AndroidHostPlatform(private val context: Context) : HostPlatform {
         }
     }.getOrNull()
 
+    override val cacheDir: File get() = context.cacheDir
+
+    override fun thumbnail(item: SharedItem, maxPx: Int): ByteArray? = runCatching {
+        val bmp = if (item.mimeType.startsWith("video/")) videoFrame(item, maxPx) else photo(item, maxPx)
+        bmp ?: return null
+        val scale = minOf(1f, maxPx.toFloat() / maxOf(bmp.width, bmp.height))
+        val fitted = if (scale < 1f) android.graphics.Bitmap.createScaledBitmap(bmp, (bmp.width * scale).toInt().coerceAtLeast(1), (bmp.height * scale).toInt().coerceAtLeast(1), true) else bmp
+        java.io.ByteArrayOutputStream().also { fitted.compress(android.graphics.Bitmap.CompressFormat.JPEG, 72, it) }.toByteArray()
+            .also { if (fitted !== bmp) fitted.recycle(); bmp.recycle() }
+    }.getOrNull()
+
+    private fun stream(item: SharedItem) =
+        if (item.uri.startsWith("content:")) context.contentResolver.openInputStream(Uri.parse(item.uri)) else FileInputStream(File(item.path))
+
+    /** Decoded at the power-of-two scale just above the target, never at full size. */
+    private fun photo(item: SharedItem, maxPx: Int): android.graphics.Bitmap? {
+        val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        stream(item)?.use { android.graphics.BitmapFactory.decodeStream(it, null, bounds) }
+        val long = maxOf(bounds.outWidth, bounds.outHeight).takeIf { it > 0 } ?: return null
+        var sample = 1
+        while (long / (sample * 2) >= maxPx) sample *= 2
+        return stream(item)?.use { android.graphics.BitmapFactory.decodeStream(it, null, android.graphics.BitmapFactory.Options().apply { inSampleSize = sample }) }
+    }
+
+    /** A frame one second in (the very first is often black), scaled down by the decoder where it can. */
+    private fun videoFrame(item: SharedItem, maxPx: Int): android.graphics.Bitmap? {
+        val r = android.media.MediaMetadataRetriever()
+        try {
+            if (item.uri.startsWith("content:")) r.setDataSource(context, Uri.parse(item.uri)) else r.setDataSource(item.path)
+            val at = 1_000_000L
+            val mode = android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC
+            return if (Build.VERSION.SDK_INT >= 27) r.getScaledFrameAtTime(at, mode, maxPx, maxPx) else r.getFrameAtTime(at, mode)
+        } finally {
+            r.release()
+        }
+    }
+
     override fun onHostingChanged(running: Boolean) {
         val intent = Intent(context, ShareHostService::class.java)
         if (!running) { context.stopService(intent); return }

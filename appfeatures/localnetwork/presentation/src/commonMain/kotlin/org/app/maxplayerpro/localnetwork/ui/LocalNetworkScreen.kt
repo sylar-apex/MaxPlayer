@@ -79,6 +79,7 @@ import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.CircularProgressIndicator
@@ -96,6 +97,7 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -419,14 +421,39 @@ private fun DeviceContent(state: LocalNetworkContract.State, open: LocalNetworkC
             }
         }
     }
+    // A folder whose save sheet is open: (shared folder, subfolder or "" for all of it).
+    var savingFolder by remember { mutableStateOf<Pair<RemoteShare, String>?>(null) }
+    savingFolder?.let { (share, sub) ->
+        val inside = share.items.filter { it.downloadPath != null && (sub.isEmpty() || it.dir == sub || it.dir.startsWith("$sub/")) }
+        DownloadSheet(sub.substringAfterLast('/').ifEmpty { share.title }, inside.sumOf { it.sizeBytes }, state.downloadsLabel, onDismiss = { savingFolder = null }) { name, location ->
+            savingFolder = null
+            onEvent(Event.DownloadFolder(share, sub, name, location))
+        }
+    }
     val folder = open.openShareId?.let { id -> open.shares.firstOrNull { it.id == id } }?.let { open.openable(it) }
     val group = open.openGroup
     val inside = folder != null || group != null
-    BackHandler { onEvent(if (inside) Event.CloseShare else Event.CloseDevice) }
+    // Subfolder open inside a shared folder (`a/b`); "" is its top.
+    var subdir by remember(folder?.id) { mutableStateOf("") }
+    val back = { if (subdir.isNotEmpty()) subdir = subdir.substringBeforeLast('/', "") else onEvent(if (inside) Event.CloseShare else Event.CloseDevice) }
+    // Items of this level (with their index in the share) and the subfolders below it.
+    val here = folder?.items?.withIndex()?.filter { it.value.dir == subdir }.orEmpty()
+    val subfolders = folder?.items.orEmpty().mapNotNull { item ->
+        val d = item.dir
+        when {
+            subdir.isEmpty() -> d.substringBefore('/').ifEmpty { null }
+            d.startsWith("$subdir/") -> d.removePrefix("$subdir/").substringBefore('/')
+            else -> null
+        }
+    }.groupingBy { it }.eachCount().entries.sortedBy { it.key.lowercase() }.map { it.key to it.value }
+    // Tell the owner which folder is open, so it makes thumbnails for just these files ahead of scrolling.
+    LaunchedEffect(folder?.id, subdir) { folder?.let { onEvent(Event.WarmFolder(it, subdir)) } }
+    BackHandler { back() }
     var menu by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
         // TopBar keeps clear of the status bar, like every other screen.
-        TopBar(folder?.title ?: group?.title ?: open.name, onBack = { onEvent(if (inside) Event.CloseShare else Event.CloseDevice) }) {
+        TopBar(subdir.substringAfterLast('/').ifEmpty { null } ?: folder?.title ?: group?.title ?: open.name, onBack = back) {
+            if (folder != null && canDownload && folder.downloadable) IconButton({ savingFolder = folder to subdir }) { Icon(Icons.Default.Download, "Download this folder") }
             IconButton({ onEvent(Event.Refresh) }) { Icon(Icons.Default.Refresh, "Refresh") }
             Box {
                 IconButton({ menu = true }) { Icon(Icons.Default.MoreVert, "More") }
@@ -437,16 +464,37 @@ private fun DeviceContent(state: LocalNetworkContract.State, open: LocalNetworkC
         }
         PullRefresh(refreshing, { onEvent(Event.Refresh) }, Modifier.fillMaxWidth().weight(1f)) {
         when {
-            folder != null && folder.items.isNotEmpty() && folder.items.all { it.mimeType.startsWith("image/") } ->
-                RemotePhotoGrid(folder.items.map { folder to it }, open) { i -> photoView = folder.items.map { PhotoRef(open.urlOf(folder, it), it.name) } to i }
+            folder != null && subfolders.isEmpty() && here.isNotEmpty() && here.all { it.value.mimeType.startsWith("image/") } ->
+                RemotePhotoGrid(here.map { folder to it.value }, open) { i -> photoView = here.map { PhotoRef(open.urlOf(folder, it.value), it.value.name, thumb = open.thumbOf(folder, it.value)) } to i }
             folder != null -> LazyColumn(Modifier.fillMaxSize()) {
-                itemsIndexed(folder.items, key = { _, it -> it.id }) { i, item ->
+                if (subdir.isNotEmpty()) item(key = "path") {
+                    Text(folder.title + " / " + subdir.replace("/", " / "), Modifier.padding(horizontal = 16.dp, vertical = 4.dp), fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                }
+                // Subfolders first, like the owner's own file manager.
+                items(subfolders, key = { "dir-" + it.first }) { (name, count) ->
+                    Row(Modifier.fillMaxWidth().height(62.dp).clickable { subdir = if (subdir.isEmpty()) name else "$subdir/$name" }.padding(horizontal = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically) {
+                        FolderGlyph(Modifier.size(width = 62.dp, height = 46.dp))
+                        Spacer(Modifier.width(16.dp))
+                        Column(Modifier.weight(1f)) {
+                            Text(name, fontSize = 15.sp, lineHeight = 18.sp, color = MaterialTheme.colorScheme.primary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Spacer(Modifier.height(2.dp))
+                            Text(if (count == 1) "1 file" else "$count files", fontSize = 12.sp, lineHeight = 15.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                        if (canDownload && folder.downloadable) IconButton({ savingFolder = folder to (if (subdir.isEmpty()) name else "$subdir/$name") }) {
+                            Icon(Icons.Default.Download, "Download folder", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
+                }
+                items(here, key = { it.value.id }) { (i, item) ->
                     FileRow(item.name, item.isAudio, item.durationMs, item.sizeBytes, locked = false,
                         onDownload = if (canDownload && item.downloadPath != null) ({ saving = folder to i }) else null,
-                        thumbnail = open.urlOf(folder, item).takeIf { item.mimeType.startsWith("image/") }, other = item.isOtherFile()) {
+                        thumbnail = open.thumbOf(folder, item).takeIf { item.thumbPath != null || item.mimeType.startsWith("image/") }, other = item.isOtherFile(),
+                        video = item.mimeType.startsWith("video/")) {
                         when {
-                            item.mimeType.startsWith("image/") -> photoView = folder.items.filter { it.mimeType.startsWith("image/") }
-                                .let { imgs -> imgs.map { PhotoRef(open.urlOf(folder, it), it.name) } to imgs.indexOf(item) }
+                            item.mimeType.startsWith("image/") -> photoView = here.map { it.value }.filter { it.mimeType.startsWith("image/") }
+                                .let { imgs -> imgs.map { PhotoRef(open.urlOf(folder, it), it.name, thumb = open.thumbOf(folder, it)) } to imgs.indexOf(item) }
                             item.isOtherFile() -> if (canDownload && item.downloadPath != null) saving = folder to i
                             else -> onEvent(Event.Play(folder, i))
                         }
@@ -456,7 +504,7 @@ private fun DeviceContent(state: LocalNetworkContract.State, open: LocalNetworkC
             }
             group != null && group.kind == KIND_IMAGE && open.loose(group).all { open.openable(it) != null } -> {
                 val pairs = open.loose(group).mapNotNull { open.openable(it) }.flatMap { s2 -> s2.items.map { s2 to it } }
-                RemotePhotoGrid(pairs, open) { i -> photoView = pairs.map { (sh, it) -> PhotoRef(open.urlOf(sh, it), it.name) } to i }
+                RemotePhotoGrid(pairs, open) { i -> photoView = pairs.map { (sh, it) -> PhotoRef(open.urlOf(sh, it), it.name, thumb = open.thumbOf(sh, it)) } to i }
             }
             group != null -> LazyColumn(Modifier.fillMaxSize()) {
                 // Each file on its own row; a protected one shows a lock and asks its own PIN when tapped.
@@ -467,9 +515,10 @@ private fun DeviceContent(state: LocalNetworkContract.State, open: LocalNetworkC
                     } else itemsIndexed(ready.items, key = { _, it -> share.id + "/" + it.id }) { i, item ->
                         FileRow(item.name, item.isAudio, item.durationMs, item.sizeBytes, locked = false,
                             onDownload = if (canDownload && item.downloadPath != null) ({ saving = ready to i }) else null,
-                            thumbnail = open.urlOf(ready, item).takeIf { item.mimeType.startsWith("image/") }, other = item.isOtherFile()) {
+                            thumbnail = open.thumbOf(ready, item).takeIf { item.thumbPath != null || item.mimeType.startsWith("image/") }, other = item.isOtherFile(),
+                            video = item.mimeType.startsWith("video/")) {
                             when {
-                                item.mimeType.startsWith("image/") -> photoView = listOf(PhotoRef(open.urlOf(ready, item), item.name)) to 0
+                                item.mimeType.startsWith("image/") -> photoView = listOf(PhotoRef(open.urlOf(ready, item), item.name, thumb = open.thumbOf(ready, item))) to 0
                                 item.isOtherFile() -> if (canDownload && item.downloadPath != null) saving = ready to i
                                 else -> onEvent(Event.PlayInGroup(group, ready, i))
                             }
@@ -491,7 +540,9 @@ private fun DeviceContent(state: LocalNetworkContract.State, open: LocalNetworkC
             }
             else -> LazyColumn(Modifier.fillMaxSize()) {
                 // Shared folders by their own names, then one folder per kind for files shared on their own.
-                items(open.shares.filter { it.folder }.sortedBy { it.title.lowercase() }, key = { it.id }) { share -> ShareRow(share, open, onEvent) }
+                items(open.shares.filter { it.folder }.sortedBy { it.title.lowercase() }, key = { it.id }) { share ->
+                    ShareRow(share, open, onEvent, onDownload = open.openable(share)?.takeIf { canDownload && it.downloadable }?.let { ready -> { savingFolder = ready to "" } })
+                }
                 items(LocalNetworkContract.Group.entries.filter { open.loose(it).isNotEmpty() }, key = { "group-" + it.name }) { g ->
                     GroupRow(g, open.loose(g).sumOf { it.itemCount }) { onEvent(Event.OpenGroup(g)) }
                 }
@@ -521,7 +572,7 @@ private fun GroupRow(group: LocalNetworkContract.Group, count: Int, onClick: () 
 
 /** A shared folder or file, drawn like the library's own rows; a lock at the end marks a protected one not yet opened. */
 @Composable
-private fun ShareRow(share: RemoteShare, open: LocalNetworkContract.OpenDevice, onEvent: (Event) -> Unit) {
+private fun ShareRow(share: RemoteShare, open: LocalNetworkContract.OpenDevice, onEvent: (Event) -> Unit, onDownload: (() -> Unit)? = null) {
     val ready = open.openable(share)
     val locked = ready == null
     if (share.folder || share.itemCount > 1) {
@@ -535,6 +586,7 @@ private fun ShareRow(share: RemoteShare, open: LocalNetworkContract.OpenDevice, 
                 Text(countLabel(share.itemCount, if (share.audio) KIND_AUDIO else share.kind), fontSize = 12.sp, lineHeight = 15.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
             if (locked) LockMark()
+            onDownload?.let { IconButton(it) { Icon(Icons.Default.Download, "Download folder", tint = MaterialTheme.colorScheme.onSurfaceVariant) } }
         }
     } else {
         val item = ready?.items?.firstOrNull()
@@ -551,12 +603,18 @@ private fun FileRow(
     thumbnail: String? = null,
     /** A document or other file, drawn with a file icon. */
     other: Boolean = false,
+    /** A video: its thumbnail gets a play badge, so it isn't mistaken for a photo. */
+    video: Boolean = false,
     onClick: () -> Unit,
 ) {
     Row(Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(width = 120.dp, height = 68.dp).background(MaterialTheme.colorScheme.surfaceVariant, RoundedCornerShape(6.dp)), contentAlignment = Alignment.Center) {
-            if (thumbnail != null) AsyncImage(thumbnail, null, Modifier.fillMaxSize().clip(RoundedCornerShape(6.dp)), contentScale = ContentScale.Crop)
-            else Icon(if (isAudio) Icons.Default.MusicNote else if (other) Icons.AutoMirrored.Filled.InsertDriveFile else Icons.Default.Movie, null, Modifier.size(28.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (thumbnail != null) {
+                AsyncImage(thumbnail, null, Modifier.fillMaxSize().clip(RoundedCornerShape(6.dp)), contentScale = ContentScale.Crop)
+                // What kind of file this is, over the picture: photos have none.
+                if (video || isAudio) Icon(if (isAudio) Icons.Default.MusicNote else Icons.Default.PlayArrow, if (isAudio) "Audio" else "Video",
+                    Modifier.size(26.dp).background(Color.Black.copy(alpha = 0.55f), androidx.compose.foundation.shape.CircleShape).padding(3.dp), tint = Color.White)
+            } else Icon(if (isAudio) Icons.Default.MusicNote else if (other) Icons.AutoMirrored.Filled.InsertDriveFile else Icons.Default.Movie, null, Modifier.size(28.dp), tint = MaterialTheme.colorScheme.onSurfaceVariant)
             if (durationMs > 0) Text(formatDuration(durationMs), Modifier.align(Alignment.BottomEnd).padding(4.dp)
                 .background(Color.Black.copy(alpha = 0.7f), RoundedCornerShape(3.dp)).padding(horizontal = 4.dp, vertical = 1.dp),
                 color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Medium)
@@ -599,7 +657,7 @@ private fun RemotePhotoGrid(items: List<Pair<RemoteShare, RemoteItem>>, open: Lo
         horizontalArrangement = Arrangement.spacedBy(2.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
         items(items.size, key = { items[it].first.id + "/" + items[it].second.id }) { i ->
             val (share, item) = items[i]
-            AsyncImage(open.urlOf(share, item), item.name, Modifier.aspectRatio(1f).background(MaterialTheme.colorScheme.surfaceVariant).clickable { onOpen(i) },
+            AsyncImage(open.thumbOf(share, item), item.name, Modifier.aspectRatio(1f).background(MaterialTheme.colorScheme.surfaceVariant).clickable { onOpen(i) },
                 contentScale = ContentScale.Crop)
         }
     }
@@ -644,7 +702,7 @@ private fun DownloadRow(t: DownloadTask, onEvent: (Event) -> Unit) {
             Text(t.name, fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
                 when (t.state) {
-                    DownloadState.Running -> "${formatSize(t.doneBytes)} of ${formatSize(t.sizeBytes)}"
+                    DownloadState.Running -> (if (t.files > 0) "${t.doneFiles} of ${t.files} files · " else "") + "${formatSize(t.doneBytes)} of ${formatSize(t.sizeBytes)}"
                     // Show the folder, not the file name again.
                     DownloadState.Done -> "Saved in " + (t.detail?.substringBeforeLast('/', "")?.substringAfterLast('/')?.ifEmpty { null } ?: "Downloads")
                     DownloadState.Failed -> t.detail ?: "Download failed"

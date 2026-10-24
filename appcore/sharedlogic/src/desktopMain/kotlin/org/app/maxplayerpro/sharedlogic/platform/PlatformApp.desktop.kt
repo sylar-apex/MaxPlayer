@@ -18,6 +18,16 @@ actual object PlatformApp {
         return runCatching { File(dialog.directory, name).readText() }.getOrNull()
     }
 
+    actual fun openFile(path: String, mimeType: String): Boolean = runCatching {
+        val file = java.io.File(path)
+        if (java.awt.Desktop.isDesktopSupported() && java.awt.Desktop.getDesktop().isSupported(java.awt.Desktop.Action.OPEN)) {
+            java.awt.Desktop.getDesktop().open(file)
+        } else {
+            // Linux desktops without AWT open support.
+            ProcessBuilder("xdg-open", file.path).start()
+        }
+    }.isSuccess
+
     actual suspend fun pickFolder(): Pair<String, String>? {
         val chooser = javax.swing.JFileChooser(System.getProperty("user.home")).apply {
             fileSelectionMode = javax.swing.JFileChooser.DIRECTORIES_ONLY

@@ -11,6 +11,8 @@ expect object PlatformApp {
      * document-tree URI on Android; null if cancelled or not possible here.
      */
     suspend fun pickFolder(): Pair<String, String>?
+    /** Opens [path] in the app the system uses for that kind of file (PDF viewer, spreadsheet, …). False if none could. */
+    fun openFile(path: String, mimeType: String): Boolean
     /** Opens the system screen for choosing this app's language. */
     fun openLanguageSettings()
     /** Closes the app's window and task. */

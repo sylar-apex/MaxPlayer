@@ -42,6 +42,17 @@ actual object PlatformApp {
         return withContext(Dispatchers.IO) { runCatching { context.contentResolver.openInputStream(uri)!!.use { it.readBytes().decodeToString() } }.getOrNull() }
     }
 
+    actual fun openFile(path: String, mimeType: String): Boolean {
+        val activity = ActivityTracker.activity ?: return false
+        return runCatching {
+            // A FileProvider link: other apps can read just this file, without storage permissions.
+            val uri = androidx.core.content.FileProvider.getUriForFile(activity, activity.packageName + ".files", java.io.File(path))
+            val intent = android.content.Intent(android.content.Intent.ACTION_VIEW).setDataAndType(uri, mimeType)
+                .addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            activity.startActivity(android.content.Intent.createChooser(intent, "Open with"))
+        }.isSuccess
+    }
+
     actual suspend fun pickFolder(): Pair<String, String>? {
         val tree: Uri = launchForResult(ActivityResultContracts.OpenDocumentTree(), null) ?: return null
         val flags = android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION

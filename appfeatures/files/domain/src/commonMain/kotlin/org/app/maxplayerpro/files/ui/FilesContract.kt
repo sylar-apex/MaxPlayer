@@ -15,6 +15,12 @@ class FilesContract {
         /** Plays a video or song, with the folder's other media queued after it. */
         data class Play(val entry: FileEntry) : Event()
         data class Share(val entries: List<FileEntry>) : Event()
+        /** Documents, archives, …: open in the system's app for that file type. */
+        data class OpenExternally(val entry: FileEntry) : Event()
+        /** Stops sharing a shared folder, subfolder or file. */
+        data class MakePrivate(val entry: FileEntry) : Event()
+        /** Shares a folder or file that sits inside a shared folder, as part of that share. */
+        data class ShareInside(val entry: FileEntry) : Event()
     }
 
     data class State(

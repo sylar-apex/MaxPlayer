@@ -27,6 +27,7 @@ class LanDiscoveryE2ETest {
         val platform = object : HostPlatform {
             override val deviceName = "Mac E2E host"
             override val platform = "Mac OS X"
+            override val cacheDir: File = java.nio.file.Files.createTempDirectory("thumbs").toFile()
             override fun open(item: SharedItem): FileChannel? = FileChannel.open(File(item.path).toPath(), StandardOpenOption.READ)
             override fun onHostingChanged(running: Boolean) {}
             override fun acquireMulticast() = AutoCloseable {}

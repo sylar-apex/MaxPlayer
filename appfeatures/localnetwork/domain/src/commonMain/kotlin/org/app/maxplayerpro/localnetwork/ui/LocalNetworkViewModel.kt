@@ -1,6 +1,7 @@
 package org.app.maxplayerpro.localnetwork.ui
 
 import androidx.lifecycle.viewModelScope
+import org.app.kmediaplayer.model.MediaFile
 import com.psbapp.mvi.MVIBaseViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -11,6 +12,7 @@ import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import org.app.kmediaplayer.util.nowMs
 import org.app.maxplayerpro.localnetwork.share.Downloader
+import org.app.maxplayerpro.localnetwork.share.FolderFile
 import org.app.maxplayerpro.localnetwork.share.NearbyClient
 import org.app.maxplayerpro.localnetwork.share.SaveLocation
 import org.app.maxplayerpro.localnetwork.share.NearbyException
@@ -115,10 +117,16 @@ class LocalNetworkViewModel(
             is Event.OpenDevice -> openDevice(event.baseUrl)
             Event.CloseDevice -> { openJob?.cancel(); updateState { copy(open = null, prompt = null) } }
             is Event.OpenShare -> openShare(event.share)
+            is Event.WarmFolder -> {
+                val open = currentState.open ?: return
+                val access = open.id?.let { store.remembered.value[it] }
+                viewModelScope.launch { runCatching { client.warm(open.baseUrl, event.share.id, event.dir, access?.deviceToken, access?.shareTokens?.get(event.share.id)) } }
+            }
             Event.CloseShare -> editOpen { if (it.openShareId != null) it.copy(openShareId = null) else it.copy(openGroup = null) }
             is Event.OpenGroup -> editOpen { it.copy(openGroup = event.group) }
             is Event.PlayInGroup -> playInGroup(event.group, event.share, event.index)
             is Event.Download -> download(event.share, event.index, event.name, event.location)
+            is Event.DownloadFolder -> downloadFolder(event.share, event.subdir, event.name, event.location)
             is Event.CancelDownload -> downloader.cancel(event.id)
             Event.ClearDownloads -> downloader.clearFinished()
             is Event.SubmitPin -> submitPin(event.pin)
@@ -256,8 +264,16 @@ class LocalNetworkViewModel(
         val withItems = open.unlocked[share.id] ?: share
         val files = client.mediaFiles(open.baseUrl, withItems, access?.deviceToken, access?.shareTokens?.get(share.id))
         if (files.isEmpty()) return
-        val start = index.coerceIn(files.indices)
-        if (files[start].isAudio) operations.playMusic(files, start) else operations.play(files, start)
+        playSameKind(files, index.coerceIn(files.indices))
+    }
+
+    /** Queues only files of the tapped one's kind (videos, or songs), so a photo or document never plays as a video. */
+    private fun playSameKind(files: List<MediaFile>, start: Int) {
+        val tapped = files[start]
+        fun kind(f: MediaFile) = if (f.isAudio || f.mimeType.startsWith("audio/")) 1 else if (f.mimeType.startsWith("video/") || f.mimeType == "video/*") 0 else 2
+        val queue = files.filter { kind(it) == kind(tapped) }
+        val at = queue.indexOf(tapped).coerceAtLeast(0)
+        if (kind(tapped) == 1) operations.playMusic(queue, at) else operations.play(queue, at)
     }
 
     /** Plays the group's open files as one queue, starting at [index] of [share]. */
@@ -269,8 +285,7 @@ class LocalNetworkViewModel(
         if (files.isEmpty()) return
         // The tapped file's place in the queue: the files of the shares listed before it, plus its index.
         val start = ready.takeWhile { it.id != share.id }.sumOf { it.items.size } + index
-        val at = start.coerceIn(files.indices)
-        if (group.audio) operations.playMusic(files, at) else operations.play(files, at)
+        playSameKind(files, start.coerceIn(files.indices))
     }
 
     private fun download(share: RemoteShare, index: Int, name: String, location: SaveLocation) {
@@ -278,10 +293,25 @@ class LocalNetworkViewModel(
         val withItems = open.unlocked[share.id] ?: share
         val item = withItems.items.getOrNull(index) ?: return
         val path = item.downloadPath ?: return operations.toast("The owner doesn't allow downloading this")
+        downloader.start(open.baseUrl + path + tokenQuery(open, share), name.ifBlank { item.name }, item.sizeBytes, item.mimeType, location)
+    }
+
+    private fun downloadFolder(share: RemoteShare, subdir: String, name: String, location: SaveLocation) {
+        val open = currentState.open ?: return
+        val withItems = open.unlocked[share.id] ?: share
+        val query = tokenQuery(open, share)
+        val files = withItems.items
+            .filter { it.downloadPath != null && (subdir.isEmpty() || it.dir == subdir || it.dir.startsWith("$subdir/")) }
+            .map { FolderFile(open.baseUrl + it.downloadPath + query, it.name, it.dir.removePrefix(subdir).trim('/'), it.sizeBytes, it.mimeType) }
+        if (files.isEmpty()) return operations.toast("The owner doesn't allow downloading this")
+        downloader.startFolder(name.ifBlank { subdir.substringAfterLast('/').ifEmpty { share.title } }, files, location)
+    }
+
+    /** `?d=…&t=…` with this device's tokens for [share], since download links can't carry headers. */
+    private fun tokenQuery(open: OpenDevice, share: RemoteShare): String {
         val access = open.id?.let { store.remembered.value[it] }
-        val query = listOfNotNull(access?.deviceToken?.let { "d=$it" }, access?.shareTokens?.get(share.id)?.takeIf { it.isNotEmpty() }?.let { "t=$it" })
+        return listOfNotNull(access?.deviceToken?.let { "d=$it" }, access?.shareTokens?.get(share.id)?.takeIf { it.isNotEmpty() }?.let { "t=$it" })
             .joinToString("&").let { if (it.isEmpty()) "" else "?$it" }
-        downloader.start(open.baseUrl + path + query, name.ifBlank { item.name }, item.sizeBytes, item.mimeType, location)
     }
 
     private fun editOpen(change: (OpenDevice) -> OpenDevice) = updateState { copy(open = open?.let(change)) }

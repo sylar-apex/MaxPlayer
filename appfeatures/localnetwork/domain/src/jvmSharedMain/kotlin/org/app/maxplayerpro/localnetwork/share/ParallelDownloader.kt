@@ -1,6 +1,7 @@
 package org.app.maxplayerpro.localnetwork.share
 
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -34,7 +35,8 @@ interface DownloadFile {
 /** Where downloads are written on this platform. */
 interface DownloadSink {
     val defaultLabel: String
-    fun create(name: String, mimeType: String, location: SaveLocation): DownloadFile
+    /** [subdir] (`a/b`) is created under [location] when missing. */
+    fun create(name: String, mimeType: String, location: SaveLocation, subdir: String = ""): DownloadFile
 }
 
 /**
@@ -50,41 +52,66 @@ class ParallelDownloader(private val sink: DownloadSink) : Downloader {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val jobs = ConcurrentHashMap<String, Job>()
 
-    override fun start(url: String, name: String, sizeBytes: Long, mimeType: String, location: SaveLocation): String {
-        val id = ShareStore.newId()
-        val task = DownloadTask(id, name, sizeBytes)
+    override fun start(url: String, name: String, sizeBytes: Long, mimeType: String, location: SaveLocation): String =
+        launchTask(DownloadTask(ShareStore.newId(), name, sizeBytes)) { id, done ->
+            val where = save(url, name, "", sizeBytes, mimeType, location, done)
+            edit(id) { it.copy(doneBytes = sizeBytes, state = DownloadState.Done, detail = where) }
+        }
+
+    override fun startFolder(name: String, files: List<FolderFile>, location: SaveLocation): String =
+        launchTask(DownloadTask(ShareStore.newId(), name, files.sumOf { it.sizeBytes }, files = files.size)) { id, done ->
+            // One file at a time (each over several connections), so a big folder doesn't open hundreds of sockets.
+            var where = ""
+            files.forEachIndexed { i, f ->
+                where = save(f.url, f.name, listOf(name, f.dir).filter { it.isNotEmpty() }.joinToString("/"), f.sizeBytes, f.mimeType, location, done)
+                edit(id) { it.copy(doneFiles = i + 1) }
+            }
+            // The saved folder itself: the last file's place, cut back to the folder's name.
+            val folder = where.substringBefore("/$name/", where.substringBeforeLast('/')) + "/$name/"
+            edit(id) { it.copy(doneBytes = it.sizeBytes, state = DownloadState.Done, detail = folder) }
+        }
+
+    /** Adds [task] to the list and runs [work] for it, with progress ticks and failure/cancel handling. */
+    private fun launchTask(task: DownloadTask, work: suspend CoroutineScope.(String, AtomicLong) -> Unit): String {
+        val id = task.id
         _tasks.update { it + task }
         jobs[id] = scope.launch {
-            val file = runCatching { sink.create(name, mimeType, location) }.getOrElse { e ->
-                edit(id) { it.copy(state = DownloadState.Failed, detail = "Can't save here: ${e.message}") }
-                return@launch
-            }
             val done = AtomicLong(0)
             val ticker = launch { while (isActive) { delay(250); edit(id) { it.copy(doneBytes = done.get()) } } }
             try {
-                val parts = if (sizeBytes >= MIN_SPLIT) PARTS else 1
-                val step = (sizeBytes + parts - 1) / parts
-                (0 until parts).map { i ->
-                    val from = i * step
-                    val to = minOf(sizeBytes, from + step) - 1
-                    async { fetchRange(url, from, to, file.channel, done) }
-                }.awaitAll()
-                ticker.cancel()
-                file.channel.close()
-                val where = file.finish()
-                edit(id) { it.copy(doneBytes = sizeBytes, state = DownloadState.Done, detail = where) }
+                work(id, done)
             } catch (e: Throwable) {
-                ticker.cancel()
-                runCatching { file.channel.close() }
-                file.abort()
                 val cancelled = !coroutineContext.isActive
                 edit(id) { it.copy(state = if (cancelled) DownloadState.Cancelled else DownloadState.Failed, detail = if (cancelled) null else (e.message ?: "Download failed")) }
                 if (cancelled) throw e
             } finally {
+                ticker.cancel()
                 jobs.remove(id)
             }
         }
         return id
+    }
+
+    /** Downloads one file into [subdir] of [location]; returns where it was saved. */
+    private suspend fun save(url: String, name: String, subdir: String, sizeBytes: Long, mimeType: String, location: SaveLocation, done: AtomicLong): String {
+        val file = runCatching { sink.create(name, mimeType, location, subdir) }.getOrElse { e -> error("Can't save here: ${e.message}") }
+        try {
+            coroutineScope {
+                val parts = if (sizeBytes >= MIN_SPLIT) PARTS else 1
+                val step = (sizeBytes + parts - 1) / parts
+                (0 until parts).map { i ->
+                    val from = i * step
+                    val to = maxOf(from, minOf(sizeBytes, from + step) - 1)
+                    async { if (sizeBytes > 0) fetchRange(url, from, to, file.channel, done) }
+                }.awaitAll()
+            }
+            file.channel.close()
+            return file.finish()
+        } catch (e: Throwable) {
+            runCatching { file.channel.close() }
+            file.abort()
+            throw e
+        }
     }
 
     override fun cancel(id: String) { jobs[id]?.cancel() }

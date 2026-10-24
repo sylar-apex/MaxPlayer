@@ -35,6 +35,7 @@ class KtorShareHostTest {
     private val platform = object : HostPlatform {
         override val deviceName = "Test host"
         override val platform = "Test"
+        override val cacheDir: File = java.nio.file.Files.createTempDirectory("thumbs").toFile()
         override fun open(item: SharedItem): FileChannel? = runCatching { FileChannel.open(File(item.path).toPath(), StandardOpenOption.READ) }.getOrNull()
         override fun onHostingChanged(running: Boolean) {}
         override fun acquireMulticast() = AutoCloseable {}

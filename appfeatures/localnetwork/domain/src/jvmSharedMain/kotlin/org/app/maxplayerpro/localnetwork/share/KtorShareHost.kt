@@ -23,6 +23,7 @@ import io.ktor.server.request.header
 import io.ktor.server.request.receive
 import io.ktor.server.response.header
 import io.ktor.server.response.respond
+import io.ktor.server.response.respondBytes
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
@@ -39,6 +40,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import org.app.kmediaplayer.util.nowMs
@@ -66,6 +68,7 @@ class KtorShareHost(private val store: ShareStore, private val platform: HostPla
     private var ioScope: CoroutineScope? = null
     private val tokens = AccessTokens(store.tokenSecret)
     private val failures = ConcurrentHashMap<String, Failures>()
+    private val thumbs = ThumbCache(java.io.File(platform.cacheDir, "share-thumbs"), platform)
 
     private data class Failures(val count: Int, val windowStartMs: Long)
 
@@ -80,6 +83,12 @@ class KtorShareHost(private val store: ShareStore, private val platform: HostPla
         started.onSuccess { (srv, port) ->
             server = srv
             ioScope = scope
+            thumbs.startWarming(scope)
+            // A new share gets thumbnails for its top level only; subfolders wait until someone opens them.
+            scope.launch {
+                val warmed = HashSet<String>()
+                store.shares.collect { list -> list.filter { warmed.add(it.id) }.forEach { thumbs.warm(it, "") } }
+            }
             _state.value = HostState.Running(port, lanInterfaces().map { (_, ip) -> "http://${ip.hostAddress}:$port" })
             platform.onHostingChanged(true)
         }.onFailure {
@@ -158,6 +167,15 @@ class KtorShareHost(private val store: ShareStore, private val platform: HostPla
                 if (!admitShare(call, share, call.request.header(SHARE_TOKEN_HEADER), now)) return@get
                 call.respond(share!!.toRemote(withItems = true))
             }
+            // A viewer opened a folder of this share: make thumbnails for the files directly in it.
+            post("/api/v1/shares/{id}/warm") {
+                val now = nowMs()
+                if (!admitDevice(call, call.request.header(DEVICE_TOKEN_HEADER), now)) return@post
+                val share = store.find(call.parameters["id"].orEmpty())
+                if (!admitShare(call, share, call.request.header(SHARE_TOKEN_HEADER), now)) return@post
+                thumbs.warm(share!!, call.request.queryParameters["dir"].orEmpty())
+                call.respond(HttpStatusCode.Accepted)
+            }
             post("/api/v1/shares/{id}/unlock") {
                 val now = nowMs()
                 if (!admitDevice(call, call.request.header(DEVICE_TOKEN_HEADER), now)) return@post
@@ -183,6 +201,8 @@ class KtorShareHost(private val store: ShareStore, private val platform: HostPla
             get("/media/{share}/{item}/{name}") { serveItem(call, scope, attachment = false) }
             // Same file, sent to be saved: only when the owner allowed downloads for this share.
             get("/download/{share}/{item}/{name}") { serveItem(call, scope, attachment = true) }
+            // Small JPEG of a photo for lists and grids, so they don't pull every full-size image.
+            get("/thumb/{share}/{item}") { serveThumb(call) }
         }
     }
 
@@ -198,6 +218,18 @@ class KtorShareHost(private val store: ShareStore, private val platform: HostPla
         call.response.header(HttpHeaders.CacheControl, "no-store")
         if (attachment) call.response.header(HttpHeaders.ContentDisposition, "attachment; filename*=UTF-8''" + item.name.encodeURLParameter())
         call.respond(ChannelContent(scope, { platform.open(item) }, size, ContentType.parse(item.mimeType.ifEmpty { "application/octet-stream" })))
+    }
+
+    private suspend fun serveThumb(call: ApplicationCall) {
+        val now = nowMs()
+        if (!admitDevice(call, call.request.queryParameters["d"], now)) return
+        val share = store.find(call.parameters["share"].orEmpty())
+        if (!admitShare(call, share, call.request.queryParameters["t"], now)) return
+        val item = share!!.items.firstOrNull { it.id == call.parameters["item"] && ThumbCache.hasThumb(it) }
+            ?: return call.respond(HttpStatusCode.NotFound)
+        val bytes = withContext(Dispatchers.IO) { thumbs.get(item) } ?: return call.respond(HttpStatusCode.NotFound)
+        call.response.header(HttpHeaders.CacheControl, "max-age=3600")
+        call.respondBytes(bytes, ContentType.Image.JPEG)
     }
 
     /** Device-level time limit: past it, nothing on this device opens. */
@@ -267,9 +299,13 @@ class KtorShareHost(private val store: ShareStore, private val platform: HostPla
         audio = items.isNotEmpty() && items.all { it.isAudio }, downloadable = allowDownload,
         kind = kindOf(items.map { it.mimeType }, items.isNotEmpty() && items.all { it.isAudio }),
         items = if (withItems) items.map {
-            val name = it.name.encodeURLPathPart()
-            RemoteItem(it.id, it.name, it.sizeBytes, it.durationMs, it.mimeType, it.isAudio, "/media/$id/${it.id}/$name", it.width, it.height,
-                downloadPath = "/download/$id/${it.id}/$name".takeIf { allowDownload })
+            // Folders shared before subfolders were kept put the sub-path in the name: "a › b › file.mp4".
+            val dir = it.dir.ifEmpty { if (" › " in it.name) it.name.substringBeforeLast(" › ").replace(" › ", "/") else "" }
+            val shown = it.name.substringAfterLast(" › ")
+            val name = shown.encodeURLPathPart()
+            RemoteItem(it.id, shown, it.sizeBytes, it.durationMs, it.mimeType, it.isAudio, "/media/$id/${it.id}/$name", it.width, it.height,
+                downloadPath = "/download/$id/${it.id}/$name".takeIf { allowDownload }, dir = dir,
+                thumbPath = "/thumb/$id/${it.id}".takeIf { _ -> ThumbCache.hasThumb(it) })
         } else emptyList(),
     )
 

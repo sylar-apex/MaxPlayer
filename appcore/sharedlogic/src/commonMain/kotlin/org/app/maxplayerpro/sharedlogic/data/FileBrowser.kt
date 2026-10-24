@@ -51,3 +51,14 @@ fun fileMime(name: String): String = when (val ext = name.substringAfterLast('.'
     "apk" -> "application/vnd.android.package-archive"
     else -> if (ext.isEmpty()) "application/octet-stream" else "application/octet-stream"
 }
+
+/** A `file://` URI for [path] with spaces and other special characters escaped, so players can open it. */
+fun fileUri(path: String): String {
+    val safe = "-._~/!$&'()*+,;=:@"
+    return "file://" + buildString {
+        path.encodeToByteArray().forEach { b ->
+            val c = (b.toInt() and 0xff).toChar()
+            if (c.isLetterOrDigit() && c.code < 128 || c in safe) append(c) else append('%').append(((b.toInt() and 0xff)).toString(16).uppercase().padStart(2, '0'))
+        }
+    }
+}

@@ -36,6 +36,8 @@ class LocalNetworkContract {
         data class OpenDevice(val baseUrl: String) : Event()
         data object CloseDevice : Event()
         data class OpenShare(val share: RemoteShare) : Event()
+        /** A folder of [share] is on screen ("" for its top): the owner makes thumbnails for its files. */
+        data class WarmFolder(val share: RemoteShare, val dir: String) : Event()
         data object CloseShare : Event()
         data class SubmitPin(val pin: String) : Event()
         data object CancelPin : Event()
@@ -45,6 +47,8 @@ class LocalNetworkContract {
         data class PlayInGroup(val group: Group, val share: RemoteShare, val index: Int) : Event()
         /** Saves item [index] of [share] as [name] in [location]. */
         data class Download(val share: RemoteShare, val index: Int, val name: String, val location: SaveLocation) : Event()
+        /** Saves the subfolder [subdir] of a shared folder ("" for all of it) as a folder [name], with its subfolders. */
+        data class DownloadFolder(val share: RemoteShare, val subdir: String, val name: String, val location: SaveLocation) : Event()
         data class CancelDownload(val id: String) : Event()
         data object ClearDownloads : Event()
         /** Forgets the PINs entered for the open device and closes it. */
@@ -84,11 +88,14 @@ class LocalNetworkContract {
         fun loose(group: Group): List<RemoteShare> = shares.filter { !it.folder && it.locked == group.protected && (if (it.audio) KIND_AUDIO else it.kind) == group.kind }
 
         /** URL of [item] in [share] with this device's tokens, for players and image loading. */
-        fun urlOf(share: RemoteShare, item: RemoteItem): String {
-            val query = listOfNotNull(deviceToken?.let { "d=$it" }, shareTokens[share.id]?.takeIf { it.isNotEmpty() }?.let { "t=$it" })
+        fun urlOf(share: RemoteShare, item: RemoteItem): String = baseUrl + item.path + query(share)
+
+        /** A small picture of a photo for lists and grids; the full file from older devices that don't make them. */
+        fun thumbOf(share: RemoteShare, item: RemoteItem): String = item.thumbPath?.let { baseUrl + it + query(share) } ?: urlOf(share, item)
+
+        private fun query(share: RemoteShare): String =
+            listOfNotNull(deviceToken?.let { "d=$it" }, shareTokens[share.id]?.takeIf { it.isNotEmpty() }?.let { "t=$it" })
                 .joinToString("&").let { if (it.isEmpty()) "" else "?$it" }
-            return baseUrl + item.path + query
-        }
     }
 
     /**

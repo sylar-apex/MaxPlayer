@@ -77,6 +77,11 @@ class NearbyClient(engineClient: HttpClient, private val self: () -> SelfDevice)
     suspend fun share(baseUrl: String, id: String, deviceToken: String?, shareToken: String?): RemoteShare =
         call { http.get("$baseUrl/api/v1/shares/$id") { auth(deviceToken, shareToken) } }.body()
 
+    /** Asks the owner to make thumbnails for the files directly in [dir] of share [id]; older owners ignore it. */
+    suspend fun warm(baseUrl: String, id: String, dir: String, deviceToken: String?, shareToken: String?) {
+        http.post("$baseUrl/api/v1/shares/$id/warm?dir=${dir.encodeURLParameter()}") { auth(deviceToken, shareToken) }
+    }
+
     suspend fun unlock(baseUrl: String, shareId: String, pin: String, deviceToken: String?): UnlockResponse = call(pinCall = true) {
         http.post("$baseUrl/api/v1/shares/$shareId/unlock") { auth(deviceToken, null); contentType(ContentType.Application.Json); setBody(UnlockRequest(pin)) }
     }.body()

@@ -9,11 +9,12 @@ internal class DesktopDownloadSink : DownloadSink {
     private val downloads = File(System.getProperty("user.home"), "Downloads")
     override val defaultLabel = "Downloads"
 
-    override fun create(name: String, mimeType: String, location: SaveLocation): DownloadFile {
-        val dir = when (location) {
+    override fun create(name: String, mimeType: String, location: SaveLocation, subdir: String): DownloadFile {
+        val base = when (location) {
             SaveLocation.Default -> downloads
             is SaveLocation.Folder -> File(location.id)
-        }.apply { mkdirs() }
+        }
+        val dir = (if (subdir.isEmpty()) base else File(base, subdir)).apply { mkdirs() }
         val target = uniqueFile(dir, name)
         val part = File(dir, ".${target.name}.part")
         val channel = FileChannel.open(part.toPath(), StandardOpenOption.CREATE, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING)

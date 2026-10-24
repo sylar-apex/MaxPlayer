@@ -82,9 +82,7 @@ class ShareStore(private val store: KeyValueStore) {
             val share = Share(
                 id = existing?.id ?: newId(),
                 title = title.ifBlank { files.firstOrNull()?.title ?: "Shared files" },
-                items = files.mapIndexed { i, f ->
-                    SharedItem("$i", f.uri, f.path, f.name, f.sizeBytes, f.durationMs, f.mimeType.ifEmpty { guessMime(f.name, f.isAudio) }, f.isAudio, f.width, f.height)
-                },
+                items = files.mapIndexed { i, f -> f.toItem("$i", folderPath) },
                 access = access,
                 code = if (access == ShareAccess.Protected) pin?.filter { it.isLetterOrDigit() }?.ifEmpty { null } ?: newCode() else null,
                 createdAtMs = existing?.createdAtMs ?: nowMs,
@@ -110,6 +108,30 @@ class ShareStore(private val store: KeyValueStore) {
             if (share.items.none { it.uri == uri }) share
             else share.copy(items = share.items.filterNot { it.uri == uri }).takeIf { it.items.isNotEmpty() }
         }
+    }
+
+    /**
+     * Stops sharing the subfolder [path] of a shared folder (everything under it); the shared folder itself when
+     * [path] is one. A share left with no files goes away.
+     */
+    suspend fun removeUnder(path: String) = mutate { list ->
+        list.mapNotNull { share ->
+            when {
+                share.folderPath == path -> null
+                share.items.none { it.path.startsWith("$path/") } -> share
+                else -> share.copy(items = share.items.filterNot { it.path.startsWith("$path/") }).takeIf { it.items.isNotEmpty() }
+            }
+        }
+    }
+
+    /** Adds [files] to the shared folder they are in (the innermost one); files already in it are skipped. */
+    suspend fun addToFolder(files: List<MediaFile>) = mutate { list ->
+        val owner = list.filter { s -> s.folderPath != null && files.all { it.path.startsWith(s.folderPath + "/") } }.maxByOrNull { it.folderPath!!.length }
+            ?: return@mutate list
+        val known = owner.items.map { it.uri }.toSet()
+        var next = (owner.items.maxOfOrNull { it.id.toIntOrNull() ?: -1 } ?: -1) + 1
+        val added = files.filter { it.uri !in known }.map { it.toItem("${next++}", owner.folderPath) }
+        list.map { if (it.id == owner.id) it.copy(items = it.items + added) else it }
     }
 
     /** Makes the share private again. */
@@ -157,6 +179,11 @@ class ShareStore(private val store: KeyValueStore) {
 
     private fun Share.matches(files: List<MediaFile>, folder: String?): Boolean =
         if (folder != null) folderPath == folder else folderPath == null && items.size == 1 && files.size == 1 && items[0].uri == files[0].uri
+
+    private fun MediaFile.toItem(id: String, folderPath: String?): SharedItem {
+        val dir = folderPath?.let { path.removePrefix("$it/").substringBeforeLast('/', "") } ?: ""
+        return SharedItem(id, uri, path, name, sizeBytes, durationMs, mimeType.ifEmpty { guessMime(name, isAudio) }, isAudio, width, height, dir)
+    }
 
     private inline fun <reified T> decode(key: String): T? =
         store.getString(key)?.let { runCatching { json.decodeFromString<T>(it) }.getOrNull() }

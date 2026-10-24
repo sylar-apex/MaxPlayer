@@ -46,9 +46,35 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.draw.blur
+import androidx.compose.foundation.layout.size
+import coil3.PlatformContext
+import coil3.SingletonImageLoader
+import androidx.compose.material3.TextButton
+import kotlinx.coroutines.delay
+import coil3.compose.LocalPlatformContext
+import coil3.request.ImageRequest
+import coil3.request.SuccessResult
+import coil3.memory.MemoryCache
+import androidx.compose.runtime.mutableStateMapOf
+import io.ktor.client.HttpClient
+import io.ktor.client.request.prepareGet
+import io.ktor.client.statement.bodyAsChannel
+import io.ktor.http.contentLength
+import io.ktor.http.isSuccess
+import io.ktor.utils.io.readRemaining
+import kotlinx.io.Buffer
+import kotlinx.io.readByteArray
+import androidx.compose.runtime.mutableStateListOf
+import coil3.request.crossfade
 
-/** A photo for [PhotoViewer]: [model] is whatever the image loader opens (file URI, content URI or http URL). */
-data class PhotoRef(val model: Any, val name: String)
+/**
+ * A photo for [PhotoViewer]: [model] is whatever the image loader opens (file URI, content URI or http URL);
+ * [thumb] is a small version already shown in a list, put up blurred at once while [model] loads.
+ */
+data class PhotoRef(val model: Any, val name: String, val thumb: Any? = null)
 
 /**
  * Full-screen photos: swipe between them, pinch or double-tap to zoom, drag to pan while zoomed (swiping pages
@@ -61,9 +87,35 @@ fun PhotoViewer(photos: List<PhotoRef>, start: Int, onClose: () -> Unit, actions
     val pager = rememberPagerState(initialPage = start.coerceIn(0, (photos.size - 1).coerceAtLeast(0))) { photos.size }
     var chrome by remember { mutableStateOf(true) }
     var zoomed by remember { mutableStateOf(false) }
+    // Full photos load one at a time: the one you stop on first, then the next, then the previous. Swiping on
+    // cancels whatever was loading, so fast swiping never starts a pile of downloads. Finished photos stay in the
+    // image cache, so going back to one is instant.
+    val context = LocalPlatformContext.current
+    val done = remember { mutableStateListOf<Int>() }
+    // Download progress (0..1) of network photos, shown in the water loader.
+    val progress = remember { mutableStateMapOf<Int, Float>() }
+    val failed = remember { mutableStateListOf<Int>() }
+    var retries by remember { mutableStateOf(0) }
+    LaunchedEffect(pager.settledPage, retries) {
+        val here = pager.settledPage
+        // Only once you stay on a photo; passing through doesn't count.
+        delay(250)
+        val loader = SingletonImageLoader.get(context)
+        for (i in listOf(here, here + 1, here - 1)) {
+            if (i !in photos.indices || i in done || i in failed) continue
+            var tries = 0
+            while (true) {
+                if (load(context, photos[i]) { progress[i] = it }) { done += i; break }
+                // A busy network: try again a little later, then leave it for a tap.
+                if (++tries >= 3) { failed += i; break }
+                delay(800L * tries)
+            }
+        }
+    }
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         HorizontalPager(pager, Modifier.fillMaxSize(), userScrollEnabled = !zoomed, key = { photos[it].model.toString() }) { page ->
-            ZoomableImage(photos[page], onZoomChanged = { if (page == pager.currentPage) zoomed = it }, onTap = { chrome = !chrome })
+            ZoomableImage(photos[page], ready = page in done, failed = page in failed, progress = progress[page], onRetry = { failed -= page; retries++ },
+                onZoomChanged = { if (page == pager.currentPage) zoomed = it }, onTap = { chrome = !chrome })
         }
         AnimatedVisibility(chrome, enter = fadeIn(), exit = fadeOut()) {
             Row(
@@ -84,7 +136,7 @@ fun PhotoViewer(photos: List<PhotoRef>, start: Int, onClose: () -> Unit, actions
 }
 
 @Composable
-private fun ZoomableImage(photo: PhotoRef, onZoomChanged: (Boolean) -> Unit, onTap: () -> Unit) {
+private fun ZoomableImage(photo: PhotoRef, ready: Boolean, failed: Boolean, progress: Float?, onRetry: () -> Unit, onZoomChanged: (Boolean) -> Unit, onTap: () -> Unit) {
     var scale by remember { mutableFloatStateOf(1f) }
     var offset by remember { mutableStateOf(Offset.Zero) }
     fun set(s: Float, o: Offset) {
@@ -92,9 +144,10 @@ private fun ZoomableImage(photo: PhotoRef, onZoomChanged: (Boolean) -> Unit, onT
         offset = if (scale == 1f) Offset.Zero else o
         onZoomChanged(scale > 1.01f)
     }
-    AsyncImage(
-        photo.model, photo.name, contentScale = ContentScale.Fit,
-        modifier = Modifier.fillMaxSize()
+    val context = LocalPlatformContext.current
+    var shown by remember { mutableStateOf(false) }
+    Box(
+        Modifier.fillMaxSize()
             .pointerInput(Unit) {
                 detectTapGestures(
                     onTap = { onTap() },
@@ -116,5 +169,62 @@ private fun ZoomableImage(photo: PhotoRef, onZoomChanged: (Boolean) -> Unit, onT
                 }
             }
             .graphicsLayer { scaleX = scale; scaleY = scale; translationX = offset.x; translationY = offset.y },
-    )
+        contentAlignment = Alignment.Center,
+    ) {
+        // The list's thumbnail, softened, the moment the photo opens; the full photo fades in over it.
+        if (!shown && photo.thumb != null) AsyncImage(photo.thumb, null, Modifier.fillMaxSize().blur(8.dp), contentScale = ContentScale.Fit)
+        // Loaded by the viewer's queue; here it comes straight from the cache.
+        if (ready) AsyncImage(fullRequest(context, photo), photo.name, Modifier.fillMaxSize(), contentScale = ContentScale.Fit, onSuccess = { shown = true })
+        when {
+            shown -> {}
+            failed -> TextButton(onRetry) { Text("Couldn't load · Tap to retry", color = Color.White) }
+            progress != null -> WaterLoader(progress)
+            else -> CircularProgressIndicator(Modifier.size(36.dp), color = Color.White, strokeWidth = 3.dp)
+        }
+    }
 }
+
+/**
+ * The full photo, decoded to at most [FULL_PX] on its long side: sharp on any screen and when zoomed, without
+ * decoding every pixel of a 50-megapixel file. The queue and the page use the same request, so they share the cache.
+ */
+private fun fullRequest(context: PlatformContext, photo: PhotoRef): ImageRequest =
+    ImageRequest.Builder(context).data(photo.model).memoryCacheKey(cacheKey(photo)).size(FULL_PX).crossfade(true).build()
+
+private fun cacheKey(photo: PhotoRef) = "viewer:${photo.model}"
+
+/** Shared by the viewer's downloads; photos from other devices come over plain HTTP. */
+private val viewerHttp by lazy { HttpClient() }
+
+/**
+ * Loads [photo] into the image cache. A network photo is downloaded here so [onProgress] can report how much has
+ * arrived, then decoded under the same cache key the page uses; anything else goes straight to the image loader.
+ */
+private suspend fun load(context: PlatformContext, photo: PhotoRef, onProgress: (Float) -> Unit): Boolean {
+    val loader = SingletonImageLoader.get(context)
+    val url = (photo.model as? String)?.takeIf { it.startsWith("http") }
+        ?: return loader.execute(fullRequest(context, photo)) is SuccessResult
+    // Already decoded earlier (going back to a photo): no second download.
+    if (loader.memoryCache?.get(MemoryCache.Key(cacheKey(photo))) != null) return true
+    val bytes = runCatching {
+        viewerHttp.prepareGet(url).execute { response ->
+            if (!response.status.isSuccess()) return@execute null
+            val total = response.contentLength() ?: 0L
+            val channel = response.bodyAsChannel()
+            val out = Buffer()
+            onProgress(0f)
+            while (!channel.isClosedForRead) {
+                val chunk = channel.readRemaining(64 * 1024L)
+                out.write(chunk.readByteArray())
+                // The download is the first 95%; decoding the photo is the rest, so 100% means it is on screen.
+                if (total > 0) onProgress(out.size.toFloat() / total * DOWNLOAD_SHARE)
+            }
+            out.readByteArray()
+        }
+    }.getOrNull() ?: return false
+    val request = ImageRequest.Builder(context).data(bytes).memoryCacheKey(cacheKey(photo)).size(FULL_PX).build()
+    return (loader.execute(request) is SuccessResult).also { if (it) onProgress(1f) }
+}
+
+private const val FULL_PX = 2560
+private const val DOWNLOAD_SHARE = 0.95f

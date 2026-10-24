@@ -12,6 +12,12 @@ interface HostPlatform {
     /** Opens [item] for reading, or null when the file is gone or unreadable. */
     fun open(item: SharedItem): FileChannel?
 
+    /** A JPEG of the photo or video [item] (a frame) no larger than [maxPx] on its long side; null when it can't be made. */
+    fun thumbnail(item: SharedItem, maxPx: Int): ByteArray? = null
+
+    /** Where thumbnails are kept between runs; the system may clear it. */
+    val cacheDir: java.io.File
+
     /** Called after the server starts and after it stops; Android keeps the process and Wi-Fi awake in between. */
     fun onHostingChanged(running: Boolean)
 

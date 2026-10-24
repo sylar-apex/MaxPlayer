@@ -15,7 +15,7 @@ val settingsPages: Map<SettingsPage, List<SettingGroup>> = mapOf(
     SettingsPage.Player to listOf(
         SettingGroup("Interface", listOf(PlayerKeys.doubleTapBack, PlayerKeys.quickZoom)),
         SettingGroup("Playback", listOf(
-            PlayerKeys.resume, PlayerKeys.resumeOnlyFirst, PlayerKeys.defaultSpeed, PlayerKeys.rememberSelections, PlayerKeys.backToList, PlayerKeys.seekPreviews,
+            PlayerKeys.resume, PlayerKeys.resumeOnlyFirst, PlayerKeys.defaultSpeed, PlayerKeys.rememberSelections, PlayerKeys.backToList, PlayerKeys.autoPlayNext, PlayerKeys.seekPreviews,
             PlayerKeys.fastSeek, PlayerKeys.playAlone, PlayerKeys.mediaButtons, PlayerKeys.multiPressNextPrev, PlayerKeys.prevNextToRewFf, PlayerKeys.smartPrev, PlayerKeys.suppressError,
         )),
         SettingGroup("Background Play", listOf(PlayerKeys.backgroundMode, PlayerKeys.backgroundAudio, PlayerKeys.albumArt, PlayerKeys.smoothSwitch)),

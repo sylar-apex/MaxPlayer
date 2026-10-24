@@ -27,6 +27,8 @@ data class SharedItem(
     val isAudio: Boolean,
     val width: Int = 0,
     val height: Int = 0,
+    /** Subfolder inside a shared folder, like `React Js/src`; empty for files at its top. */
+    val dir: String = "",
 )
 
 /**
@@ -119,6 +121,10 @@ data class RemoteItem(
     val height: Int = 0,
     /** Path that sends the file as a download; null when the owner doesn't allow downloads. */
     val downloadPath: String? = null,
+    /** Subfolder inside the shared folder (`a/b`), so the viewer can show the same tree; empty at the top. */
+    val dir: String = "",
+    /** A small JPEG of a photo, for lists and grids; null for other files. */
+    val thumbPath: String? = null,
 )
 
 @Serializable

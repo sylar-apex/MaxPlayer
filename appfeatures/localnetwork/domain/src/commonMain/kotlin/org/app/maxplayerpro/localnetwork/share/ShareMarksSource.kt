@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import org.app.kmediaplayer.model.MediaFile
 import org.app.kmediaplayer.util.nowMs
 import org.app.maxplayerpro.sharedlogic.usecase.NetworkShareMarks
 import org.app.maxplayerpro.sharedlogic.usecase.ShareMarks
@@ -20,11 +21,20 @@ class ShareMarksSource(private val store: ShareStore, host: ShareHost) : Network
         if (state !is HostState.Running) return@combine ShareMarks()
         val now = nowMs()
         val open = shares.filter { it.isOpen(now) }
-        ShareMarks(folders = open.mapNotNull { it.folderPath }.toSet(), files = open.flatMap { s -> s.items.map { it.uri } }.toSet())
+        val roots = open.mapNotNull { it.folderPath }.toSet()
+        // A subfolder counts as shared while anything under it is.
+        val subfolders = open.filter { it.folderPath != null }.flatMap { s ->
+            s.items.flatMap { item -> generateSequence(item.dir.ifEmpty { null }) { it.substringBeforeLast('/', "").ifEmpty { null } }.map { s.folderPath + "/" + it } }
+        }
+        ShareMarks(folders = roots + subfolders, files = open.flatMap { s -> s.items.map { it.uri } }.toSet(), roots = roots)
     }.stateIn(scope, SharingStarted.Eagerly, ShareMarks())
 
     override fun makeFolderPrivate(path: String) {
-        scope.launch { store.shares.value.filter { it.folderPath == path }.forEach { store.delete(it.id) } }
+        scope.launch { store.removeUnder(path) }
+    }
+
+    override fun addToSharedFolder(files: List<MediaFile>) {
+        if (files.isNotEmpty()) scope.launch { store.addToFolder(files) }
     }
 
     override fun makeFilePrivate(uri: String) {
