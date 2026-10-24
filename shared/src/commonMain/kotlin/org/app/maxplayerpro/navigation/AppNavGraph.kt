@@ -47,7 +47,7 @@ fun NavGraphBuilder.appNavGraph(navController: NavController) {
                 onPlaylists = { navController.push(Routes.Playlists) },
                 onNetwork = { navController.push(Routes.LocalNetwork) },
                 onGallery = { navController.push(Routes.Gallery) },
-                onFiles = { navController.push(Routes.Files) },
+                onFiles = { navController.push(Routes.Files()) },
                 sharingToggle = { SharingToggle() },
             ),
         )
@@ -89,12 +89,14 @@ fun NavGraphBuilder.appNavGraph(navController: NavController) {
     composable<Routes.Playlists> { PlaylistsScreen(onClose = back, onPlaylist = { navController.push(Routes.PlaylistDetail(it)) }) }
     composable<Routes.PlaylistDetail> { entry -> PlaylistDetailScreen(entry.toRoute<Routes.PlaylistDetail>().id, onBack = back) }
     composable<Routes.PrivateFolder> { PrivateFolderScreen(onBack = back) }
-    composable<Routes.MediaManager> { MediaManagerScreen(onBack = back, onList = { navController.push(Routes.MediaList(it.name)) }) }
+    composable<Routes.MediaManager> {
+        MediaManagerScreen(onBack = back, onList = { navController.push(Routes.MediaList(it.name)) }, onOpenFolder = { navController.push(Routes.Files(it)) })
+    }
     composable<Routes.MediaList> { entry -> MediaListScreen(MediaListKind.valueOf(entry.toRoute<Routes.MediaList>().kind), onBack = back) }
     composable<Routes.Help> { HelpScreen(onBack = back) }
     composable<Routes.LocalNetwork> { LocalNetworkScreen(onBack = back) }
     composable<Routes.Gallery> { GalleryScreen(onBack = back) }
-    composable<Routes.Files> { FilesScreen(onBack = back) }
+    composable<Routes.Files> { entry -> FilesScreen(onBack = back, startPath = entry.toRoute<Routes.Files>().path) }
     composable<Routes.Unavailable> { entry ->
         val route = entry.toRoute<Routes.Unavailable>()
         InfoScreen(route.title, route.reason, onBack = back)

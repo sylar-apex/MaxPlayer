@@ -1,5 +1,10 @@
 package org.app.maxplayerpro.mediamanager.ui
 
+import androidx.compose.runtime.remember
+import org.koin.compose.koinInject
+import org.app.maxplayerpro.sharedlogic.data.FileRoot
+import org.app.maxplayerpro.sharedlogic.data.FileBrowser
+import org.app.maxplayerpro.appcore.component.PlacesGrid
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -36,15 +41,24 @@ import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
 
 @Composable
-fun MediaManagerScreen(onBack: () -> Unit, onList: (MediaListKind) -> Unit, viewModel: MediaManagerViewModel = koinViewModel()) {
+fun MediaManagerScreen(
+    onBack: () -> Unit, onList: (MediaListKind) -> Unit, onOpenFolder: (String) -> Unit = {},
+    viewModel: MediaManagerViewModel = koinViewModel(), files: FileBrowser = koinInject(),
+) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    MediaManagerContent(state, onBack, onList, onEvent = viewModel::setEvent)
+    // Finder-style places (Desktop, Downloads, drives, …): a tile opens it in Files to browse, open or share.
+    val places = remember(files) { files.roots() }
+    MediaManagerContent(state, onBack, onList, onEvent = viewModel::setEvent, places = places, onOpenFolder = onOpenFolder)
 }
 
 @Composable
-fun MediaManagerContent(state: MediaManagerContract.State, onBack: () -> Unit, onList: (MediaListKind) -> Unit, onEvent: (MediaManagerContract.Event) -> Unit) {
+fun MediaManagerContent(
+    state: MediaManagerContract.State, onBack: () -> Unit, onList: (MediaListKind) -> Unit, onEvent: (MediaManagerContract.Event) -> Unit,
+    places: List<FileRoot> = emptyList(), onOpenFolder: (String) -> Unit = {},
+) {
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).verticalScroll(rememberScrollState())) {
-        TopBar("Media Manager", onBack = onBack)
+        TopBar("Storage", onBack = onBack)
+        if (places.isNotEmpty()) PlacesGrid(places, onOpen = { onOpenFolder(it.path) }, Modifier.padding(horizontal = 20.dp).padding(bottom = 12.dp))
         state.summary?.let { s ->
             Row(Modifier.padding(horizontal = 20.dp)) {
                 Text("Device storage", Modifier.weight(1f), fontWeight = FontWeight.SemiBold)

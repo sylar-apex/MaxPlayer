@@ -5,8 +5,16 @@ data class FileEntry(val name: String, val path: String, val isDirectory: Boolea
     val extension: String get() = name.substringAfterLast('.', "").lowercase()
 }
 
-/** A place to start browsing: internal storage, an SD card, the home folder, a drive. */
-data class FileRoot(val label: String, val path: String)
+/** What a place is, for its icon. */
+enum class PlaceKind { Home, Disk, Removable, Desktop, Documents, Downloads, Movies, Music, Pictures, Camera, Applications }
+
+/**
+ * A place to start browsing, Finder-style: [PlaceSection.Favourites] are everyday folders (Desktop, Downloads, …),
+ * [PlaceSection.Locations] are the home folder and drives (internal storage, SD card, external disks).
+ */
+data class FileRoot(val label: String, val path: String, val kind: PlaceKind = PlaceKind.Disk, val section: PlaceSection = PlaceSection.Locations)
+
+enum class PlaceSection(val title: String) { Favourites("Favourites"), Locations("Locations") }
 
 /** Browses the device's storage for the File manager. */
 interface FileBrowser {

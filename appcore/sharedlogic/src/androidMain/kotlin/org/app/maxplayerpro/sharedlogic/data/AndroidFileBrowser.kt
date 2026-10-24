@@ -20,7 +20,17 @@ class AndroidFileBrowser(private val context: Context) : JvmFileBrowser() {
             .onFailure { runCatching { context.startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) } }
     }
 
-    override fun roots(): List<FileRoot> = StorageVolumes.directories(context).mapIndexed { i, dir ->
-        FileRoot(if (i == 0) "Internal storage" else "SD card ${if (i > 1) i else ""}".trim(), dir.path)
-    }.ifEmpty { listOf(FileRoot("Internal storage", Environment.getExternalStorageDirectory().path)) }
+    override fun roots(): List<FileRoot> {
+        val volumes = StorageVolumes.directories(context).ifEmpty { listOf(Environment.getExternalStorageDirectory()) }
+        val internal = volumes.first()
+        val favourites = listOf(
+            "Download" to PlaceKind.Downloads, "DCIM" to PlaceKind.Camera, "Pictures" to PlaceKind.Pictures,
+            "Movies" to PlaceKind.Movies, "Music" to PlaceKind.Music, "Documents" to PlaceKind.Documents,
+        ).map { (name, kind) -> java.io.File(internal, name) to kind }.filter { (f, _) -> f.isDirectory }
+            .map { (f, kind) -> FileRoot(if (f.name == "DCIM") "Camera" else f.name, f.path, kind, PlaceSection.Favourites) }
+        val locations = volumes.mapIndexed { i, dir ->
+            FileRoot(if (i == 0) "Internal storage" else "SD card ${if (i > 1) i else ""}".trim(), dir.path, if (i == 0) PlaceKind.Disk else PlaceKind.Removable)
+        }
+        return favourites + locations
+    }
 }

@@ -21,6 +21,6 @@ object Routes {
     @Serializable data object Help
     @Serializable data object LocalNetwork
     @Serializable data object Gallery
-    @Serializable data object Files
+    @Serializable data class Files(val path: String? = null)
     @Serializable data class Unavailable(val title: String, val reason: String)
 }

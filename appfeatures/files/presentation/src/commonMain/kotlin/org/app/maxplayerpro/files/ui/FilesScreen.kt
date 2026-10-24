@@ -65,6 +65,7 @@ import org.app.kmediaplayer.platform.PlatformMedia
 import org.app.kmediaplayer.util.formatSize
 import org.app.maxplayerpro.appcore.component.FolderGlyph
 import org.app.maxplayerpro.appcore.component.PhotoRef
+import org.app.maxplayerpro.appcore.component.PlacesGrid
 import org.app.maxplayerpro.appcore.component.PhotoViewer
 import org.app.maxplayerpro.appcore.component.PullRefresh
 import org.app.maxplayerpro.appcore.component.TopBar
@@ -74,8 +75,10 @@ import org.app.maxplayerpro.sharedlogic.data.fileMime
 import org.koin.compose.viewmodel.koinViewModel
 
 @Composable
-fun FilesScreen(onBack: () -> Unit, viewModel: FilesViewModel = koinViewModel()) {
+fun FilesScreen(onBack: () -> Unit, startPath: String? = null, viewModel: FilesViewModel = koinViewModel()) {
     val state by viewModel.uiState.collectAsState()
+    // Opened on a place (from Storage): go straight into it.
+    androidx.compose.runtime.LaunchedEffect(startPath) { startPath?.let { viewModel.setEvent(Event.OpenFolder(it)) } }
     FilesContent(state, onBack, viewModel::setEvent)
 }
 
@@ -99,13 +102,7 @@ fun FilesContent(state: FilesContract.State, onBack: () -> Unit, onEvent: (Event
             else -> PullRefresh(state.loading, { onEvent(Event.Refresh) }, Modifier.fillMaxWidth().weight(1f)) {
                 LazyColumn(Modifier.fillMaxSize()) {
                     if (state.path == null) {
-                        items(state.roots, key = { it.path }) { r ->
-                            Row(Modifier.fillMaxWidth().clickable { onEvent(Event.OpenFolder(r.path)) }.padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
-                                Icon(if (r.label.startsWith("SD")) Icons.Default.SdStorage else Icons.Default.Storage, null, Modifier.size(28.dp), tint = MaterialTheme.colorScheme.primary)
-                                Spacer(Modifier.width(16.dp))
-                                Column { Text(r.label, fontSize = 16.sp, fontWeight = FontWeight.Medium); Text(r.path, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                            }
-                        }
+                        item { PlacesGrid(state.roots, onOpen = { onEvent(Event.OpenFolder(it.path)) }, Modifier.padding(horizontal = 16.dp)) }
                     } else if (state.entries.isEmpty() && !state.loading) {
                         item { Text("This folder is empty.", Modifier.fillMaxWidth().padding(32.dp), textAlign = TextAlign.Center, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                     } else {
