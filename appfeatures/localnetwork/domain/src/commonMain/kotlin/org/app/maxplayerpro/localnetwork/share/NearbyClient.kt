@@ -95,6 +95,7 @@ class NearbyClient(engineClient: HttpClient, private val self: () -> SelfDevice)
             MediaFile(
                 id = i.toLong(), uri = url, path = url, name = item.name, sizeBytes = item.sizeBytes, durationMs = item.durationMs,
                 dateModifiedMs = 0, width = item.width, height = item.height, mimeType = item.mimeType, isAudio = item.isAudio,
+                posterUrl = item.thumbPath?.takeIf { item.mimeType.startsWith("video/") }?.let { baseUrl + it + query },
             )
         }
     }
@@ -118,7 +119,7 @@ class NearbyClient(engineClient: HttpClient, private val self: () -> SelfDevice)
                 throw when {
                     response.headers[AUTH_HEADER] == AUTH_DEVICE -> NearbyException(NearbyException.Kind.DevicePinNeeded,
                         if (loggedOut) "You were logged out of this device. Enter its PIN again." else "Enter this device's PIN", loggedOut)
-                    pinCall -> NearbyException(NearbyException.Kind.WrongPin, "Wrong PIN")
+                    pinCall -> NearbyException(NearbyException.Kind.WrongPin, "Wrong PIN. Check it and try again.")
                     else -> NearbyException(NearbyException.Kind.SharePinNeeded,
                         if (loggedOut) "You were logged out. Enter the PIN for this again." else "Enter the PIN for this share", loggedOut)
                 }
@@ -127,7 +128,9 @@ class NearbyClient(engineClient: HttpClient, private val self: () -> SelfDevice)
             HttpStatusCode.NotFound -> throw NearbyException(NearbyException.Kind.Gone, "No longer shared")
             HttpStatusCode.Forbidden -> throw NearbyException(NearbyException.Kind.Other, "Not open yet")
             HttpStatusCode.TooManyRequests -> throw NearbyException(NearbyException.Kind.RateLimited, "Too many wrong PINs. Try again in a minute")
-            else -> throw NearbyException(NearbyException.Kind.Other, "Device answered ${response.status.value}")
+            else -> throw NearbyException(NearbyException.Kind.Other,
+                if (response.status.value >= 500) "The other device had a problem. Try again in a moment; if it keeps happening, restart Max Player there."
+                else "Couldn't open this (error ${response.status.value}). Try again.")
         }
     }
 

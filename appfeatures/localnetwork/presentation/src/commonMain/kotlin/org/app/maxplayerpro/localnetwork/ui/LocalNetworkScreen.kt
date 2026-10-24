@@ -66,7 +66,14 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.material.icons.Icons
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Add
@@ -753,25 +760,91 @@ private fun DownloadSheet(name: String, sizeBytes: Long, defaultLabel: String, o
 @Composable
 private fun PinDialog(prompt: LocalNetworkContract.PinPrompt, deviceName: String, onEvent: (Event) -> Unit) {
     var pin by remember(prompt.share?.id) { mutableStateOf("") }
-    PlayerDialog(
-        onDismissRequest = { onEvent(Event.CancelPin) },
-        title = { Text(if (prompt.share != null) "Protected" else deviceName.ifEmpty { "Device PIN" }) },
-        text = {
-            Column {
-                Text(prompt.share?.let { "Enter the PIN for \"${it.title}\"." } ?: "This device has a PIN. Enter it once; it's remembered until the owner logs everyone out.",
-                    fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                OutlinedTextField(pin, { pin = it.filter { c -> c.isLetterOrDigit() }.take(12) }, Modifier.fillMaxWidth().padding(top = 8.dp), singleLine = true,
-                    label = { Text("PIN") }, isError = prompt.error != null,
-                    // Enter on the keyboard submits, so the button hidden behind the keyboard isn't needed.
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword, imeAction = ImeAction.Go),
-                    keyboardActions = KeyboardActions(onGo = { if (pin.isNotEmpty() && !prompt.busy) onEvent(Event.SubmitPin(pin)) }))
-                prompt.error?.let { Text(it, Modifier.padding(top = 6.dp), color = MaterialTheme.colorScheme.error, fontSize = 13.sp) }
+    var visible by remember { mutableStateOf(false) }
+    val submit = { if (pin.isNotEmpty() && !prompt.busy) onEvent(Event.SubmitPin(pin)) }
+    val focus = remember { androidx.compose.ui.focus.FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { focus.requestFocus() } }
+    // A wrong PIN shakes the boxes and clears them for the next try.
+    val shake = remember { androidx.compose.animation.core.Animatable(0f) }
+    LaunchedEffect(prompt.error) {
+        if (prompt.error == null) return@LaunchedEffect
+        pin = ""
+        for (x in listOf(14f, -12f, 9f, -6f, 3f, 0f)) shake.animateTo(x, androidx.compose.animation.core.tween(45))
+    }
+    val accent = PinAccent
+    androidx.compose.ui.window.Dialog(onDismissRequest = { onEvent(Event.CancelPin) }) {
+        androidx.compose.material3.Surface(shape = RoundedCornerShape(28.dp), color = Color(0xFF1C2230), modifier = Modifier.widthIn(max = 360.dp)) {
+            Column(Modifier.padding(horizontal = 22.dp, vertical = 26.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Box(
+                    Modifier.size(64.dp).background(androidx.compose.ui.graphics.Brush.linearGradient(listOf(accent, Color(0xFF7B5CFF))), androidx.compose.foundation.shape.CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) { Icon(Icons.Default.Lock, null, Modifier.size(30.dp), tint = Color.White) }
+                Spacer(Modifier.height(16.dp))
+                Text(prompt.share?.title ?: deviceName.ifEmpty { "This device" }, fontSize = 20.sp, fontWeight = FontWeight.Bold, color = Color.White,
+                    maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    if (prompt.share != null) "Protected on ${deviceName.ifEmpty { "this device" }}" else "This device needs a PIN. It's remembered after the first time.",
+                    Modifier.padding(top = 4.dp), fontSize = 13.sp, color = Color(0xFF9AA4B8), textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                )
+                Spacer(Modifier.height(22.dp))
+                // The boxes show what is typed into an invisible field; tapping them opens the number keyboard.
+                Box(Modifier.offset(x = shake.value.dp), contentAlignment = Alignment.Center) {
+                    androidx.compose.foundation.text.BasicTextField(
+                        pin, { pin = it.filter { c -> c.isLetterOrDigit() }.take(12) },
+                        Modifier.matchParentSize().focusRequester(focus).alpha(0f),
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword, imeAction = ImeAction.Go),
+                        keyboardActions = KeyboardActions(onGo = { submit() }),
+                    )
+                    val error = prompt.error != null && pin.isEmpty()
+                    val slots = maxOf(4, pin.length + if (pin.length < 12) 1 else 0).coerceAtMost(12)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        for (i in 0 until slots) {
+                            val filled = i < pin.length
+                            val active = i == pin.length
+                            val border = when {
+                                error -> MaterialTheme.colorScheme.error
+                                active -> accent
+                                filled -> Color(0xFF4A5468)
+                                else -> Color(0xFF323A4A)
+                            }
+                            Box(
+                                Modifier.size(width = if (slots > 6) 30.dp else 44.dp, height = 52.dp)
+                                    .background(if (filled) Color(0xFF262E3F) else Color(0xFF20283A), RoundedCornerShape(12.dp))
+                                    .border(if (active) 2.dp else 1.dp, border, RoundedCornerShape(12.dp)),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                if (filled) {
+                                    if (visible) Text(pin[i].toString(), fontSize = 20.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                                    else Box(Modifier.size(10.dp).background(Color.White, androidx.compose.foundation.shape.CircleShape))
+                                }
+                            }
+                        }
+                    }
+                }
+                Row(Modifier.fillMaxWidth().padding(top = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(prompt.error ?: "", Modifier.weight(1f), fontSize = 12.sp, color = MaterialTheme.colorScheme.error, maxLines = 2)
+                    Text(if (visible) "Hide" else "Show", Modifier.clickable { visible = !visible }.padding(6.dp), fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium, color = accent)
+                }
+                Spacer(Modifier.height(16.dp))
+                androidx.compose.material3.Button(
+                    submit, Modifier.fillMaxWidth().height(50.dp), enabled = pin.isNotEmpty() && !prompt.busy, shape = RoundedCornerShape(16.dp),
+                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                        containerColor = accent, contentColor = Color.White,
+                        disabledContainerColor = accent.copy(alpha = 0.25f), disabledContentColor = Color.White.copy(alpha = 0.6f),
+                    ),
+                ) {
+                    if (prompt.busy) CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp, color = Color.White)
+                    else Text("Unlock", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                }
+                TextButton({ onEvent(Event.CancelPin) }, Modifier.padding(top = 6.dp)) { Text("Cancel", color = Color(0xFF9AA4B8)) }
             }
-        },
-        confirmButton = { TextButton({ onEvent(Event.SubmitPin(pin)) }, enabled = pin.isNotEmpty() && !prompt.busy) { Text(if (prompt.busy) "CHECKING…" else "OPEN") } },
-        dismissButton = { TextButton({ onEvent(Event.CancelPin) }) { Text("CANCEL") } },
-    )
+        }
+    }
 }
+
+private val PinAccent = Color(0xFF3D8BFF)
 
 @Composable
 private fun AddAddressDialog(onDismiss: () -> Unit, onAdd: (String) -> Unit) {
